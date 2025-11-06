@@ -1,0 +1,1128 @@
+// src/pages/HostSettings.jsx
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { getHostProfile, updateHostProfile, getHostCoupons, createCoupon } from '../services/firestoreService';
+import { getHostBookings } from '../services/firestoreService';
+import { uploadImageToCloudinary } from '../config/cloudinary';
+import useAuth from '../hooks/useAuth';
+import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import {
+  FaUser,
+  FaCalendar,
+  FaTicketAlt,
+  FaEdit,
+  FaSave,
+  FaTimes,
+  FaPlus,
+  FaTrash,
+  FaCheckCircle,
+  FaImage,
+  FaCamera,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
+  FaExclamationCircle
+} from 'react-icons/fa';
+
+const HostSettings = () => {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('profile');
+  const [hostProfile, setHostProfile] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  const [profileData, setProfileData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    bio: '',
+    address: '',
+    profilePicture: ''
+  });
+  const [uploadingPicture, setUploadingPicture] = useState(false);
+
+  const [couponData, setCouponData] = useState({
+    code: '',
+    discount: '',
+    discountType: 'percentage', // 'percentage' or 'fixed'
+    validFrom: '',
+    validUntil: '',
+    maxUses: '',
+    minPurchase: ''
+  });
+
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [uploadError, setUploadError] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      if (!user || !user.uid) {
+        setError('User not authenticated. Please log in again.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('🔍 Fetching host settings data for user:', user.uid);
+      
+      // Use Promise.allSettled to handle individual failures
+      const [profileResult, bookingsResult, couponsResult] = await Promise.allSettled([
+        getHostProfile(user.uid),
+        getHostBookings(user.uid),
+        getHostCoupons(user.uid)
+      ]);
+
+      // Handle profile data
+      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      if (profile && profile.success && profile.data) {
+        const data = profile.data;
+        console.log('✅ Fetched profile data:', { 
+          hasProfilePicture: !!data.profilePicture,
+          firstName: data.firstName,
+          lastName: data.lastName 
+        });
+        
+        setHostProfile(data);
+        setProfileData({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: data.email || user.email || '',
+          phone: data.phone || '',
+          bio: data.bio || '',
+          address: data.address || '',
+          profilePicture: data.profilePicture || ''
+        });
+      } else {
+        const errorMsg = profile?.error || 'Host profile not found';
+        console.warn('⚠️ Profile fetch issue:', errorMsg);
+        setError(`Failed to load profile: ${errorMsg}`);
+        
+        // Still set empty profile data so form can be used
+        setProfileData({
+          firstName: '',
+          lastName: '',
+          email: user.email || '',
+          phone: '',
+          bio: '',
+          address: '',
+          profilePicture: ''
+        });
+      }
+
+      // Handle bookings - don't fail if this errors
+      const bookings = bookingsResult.status === 'fulfilled' 
+        ? bookingsResult.value 
+        : { success: false, data: [] };
+      setBookings(bookings.data || []);
+
+      // Handle coupons - don't fail if this errors
+      const coupons = couponsResult.status === 'fulfilled' 
+        ? couponsResult.value 
+        : { success: false, data: [] };
+      setCoupons(coupons.data || []);
+
+      console.log('✅ Settings data loaded');
+    } catch (error) {
+      console.error('❌ Error fetching settings data:', error);
+      setError(`Failed to load data: ${error.message || 'Please refresh the page.'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleProfilePictureUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image size must be less than 5MB');
+      setTimeout(() => setUploadError(''), 5000);
+      e.target.value = '';
+      return;
+    }
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setUploadError('Please upload a valid image file (JPG, PNG, or WebP)');
+      setTimeout(() => setUploadError(''), 5000);
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingPicture(true);
+    setUploadError('');
+    
+    try {
+      const result = await uploadImageToCloudinary(file);
+      if (result.success && result.url) {
+        setProfileData(prev => ({ ...prev, profilePicture: result.url }));
+        // Auto-save profile picture immediately
+        await updateHostProfile(user.uid, { profilePicture: result.url });
+        await fetchData();
+        setSuccess('Profile picture uploaded successfully!');
+        setTimeout(() => setSuccess(''), 4000);
+      } else {
+        setUploadError(result.error || 'Failed to upload profile picture');
+        setTimeout(() => setUploadError(''), 5000);
+      }
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      setUploadError('Failed to upload profile picture. Please try again.');
+      setTimeout(() => setUploadError(''), 5000);
+    } finally {
+      setUploadingPicture(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    // Validation
+    if (!profileData.firstName?.trim() || !profileData.lastName?.trim()) {
+      alert('Please enter your first and last name');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    
+    try {
+      console.log('Updating profile with data:', profileData);
+      
+      // Prepare clean data - trim strings and remove empty values
+      const updateData = {
+        firstName: profileData.firstName.trim(),
+        lastName: profileData.lastName.trim(),
+        phone: profileData.phone?.trim() || '',
+        bio: profileData.bio?.trim() || '',
+        address: profileData.address?.trim() || '',
+        profilePicture: profileData.profilePicture || ''
+      };
+
+      console.log('Sending update data:', updateData);
+      const result = await updateHostProfile(user.uid, updateData);
+      
+      console.log('Update result:', result);
+      
+      if (!result || !result.success) {
+        throw new Error(result?.error || 'Update failed - no success response');
+      }
+      
+      // Success - show message and refresh data
+      setSuccess('Profile updated successfully!');
+      setError('');
+      setSaving(false);
+      
+      // Wait a moment for Firestore to update, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Refresh data after successful update
+      await fetchData();
+      
+      // Close edit mode after refresh completes
+      setEditingProfile(false);
+      
+      // Clear success message after 4 seconds
+      setTimeout(() => {
+        setSuccess('');
+      }, 4000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setError(`Failed to update profile: ${error.message || 'Please try again.'}`);
+      setSuccess('');
+      setSaving(false);
+    }
+  };
+
+  const handleCouponSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await createCoupon({
+        ...couponData,
+        hostId: user.uid,
+        discount: parseFloat(couponData.discount),
+        maxUses: parseInt(couponData.maxUses) || null,
+        minPurchase: parseFloat(couponData.minPurchase) || 0,
+        validFrom: couponData.validFrom ? new Date(couponData.validFrom) : new Date(),
+        validUntil: couponData.validUntil ? new Date(couponData.validUntil) : null
+      });
+      
+      setCouponData({
+        code: '',
+        discount: '',
+        discountType: 'percentage',
+        validFrom: '',
+        validUntil: '',
+        maxUses: '',
+        minPurchase: ''
+      });
+      setShowCouponForm(false);
+      await fetchData();
+      alert('Coupon created successfully!');
+    } catch (error) {
+      console.error('Error creating coupon:', error);
+      alert('Failed to create coupon. Please try again.');
+    }
+  };
+
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    // Validation
+    if (!passwordData.currentPassword) {
+      setPasswordError('Please enter your current password');
+      return;
+    }
+
+    if (!passwordData.newPassword) {
+      setPasswordError('Please enter a new password');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long');
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      setPasswordError('New password must be different from current password');
+      return;
+    }
+
+    setChangingPassword(true);
+
+    try {
+      // Re-authenticate user with current password
+      const credential = EmailAuthProvider.credential(
+        user.email,
+        passwordData.currentPassword
+      );
+      
+      await reauthenticateWithCredential(user, credential);
+      
+      // Update password
+      await updatePassword(user, passwordData.newPassword);
+      
+      // Success
+      setPasswordSuccess('Password changed successfully!');
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      
+      setTimeout(() => setPasswordSuccess(''), 4000);
+    } catch (error) {
+      console.error('Error changing password:', error);
+      
+      if (error.code === 'auth/wrong-password') {
+        setPasswordError('Current password is incorrect');
+      } else if (error.code === 'auth/weak-password') {
+        setPasswordError('New password is too weak');
+      } else if (error.code === 'auth/requires-recent-login') {
+        setPasswordError('Please log out and log back in before changing your password');
+      } else {
+        setPasswordError('Failed to change password. Please try again.');
+      }
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const tabs = [
+    { id: 'profile', label: 'Profile', icon: FaUser },
+    { id: 'bookings', label: 'Bookings', icon: FaCalendar },
+    { id: 'coupons', label: 'Coupons', icon: FaTicketAlt },
+    { id: 'security', label: 'Security', icon: FaLock }
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* Enhanced Header Section */}
+      <div className="space-y-1">
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Account Settings</h1>
+        <p className="text-sm text-gray-600">Manage your profile, bookings, promotions, and security preferences</p>
+      </div>
+
+      {/* Enhanced Tabs Container with Visual Cards */}
+      <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-200 overflow-hidden">
+        {/* Enhanced Tab Navigation */}
+        <div className="border-b-2 border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+          <nav className="flex flex-wrap" role="tablist" aria-label="Settings sections">
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`${tab.id}-panel`}
+                  aria-label={`${tab.label} settings`}
+                  className={`
+                    flex-1 flex items-center justify-center gap-2 px-4 py-3 font-semibold text-sm transition-all duration-200 min-h-[48px] min-w-[100px]
+                    ${activeTab === tab.id
+                      ? 'bg-white text-emerald-700 border-b-3 border-emerald-600 shadow-md'
+                      : 'text-gray-700 hover:text-gray-900 hover:bg-white/50 hover:shadow-sm'
+                    }
+                  `}
+                >
+                  <Icon className="text-base" aria-hidden="true" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Enhanced Tab Content with Increased Spacing */}
+        <div className="p-6 md:p-8" id={`${activeTab}-panel`} role="tabpanel">
+          {/* Profile Tab */}
+          {activeTab === 'profile' && (
+            <div className="space-y-6">
+              {/* Enhanced Success/Error Messages */}
+              {success && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  aria-live="polite"
+                  className="bg-emerald-50 border-l-4 border-emerald-600 text-emerald-900 px-4 py-3 rounded-lg flex items-start gap-2 shadow-md"
+                >
+                  <FaCheckCircle className="text-emerald-600 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <span className="text-sm font-semibold">{success}</span>
+                </motion.div>
+              )}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  aria-live="assertive"
+                  className="bg-red-50 border-l-4 border-red-600 text-red-900 px-4 py-3 rounded-lg flex items-start gap-2 shadow-md"
+                >
+                  <FaExclamationCircle className="text-red-600 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <p className="text-sm font-semibold">{error}</p>
+                </motion.div>
+              )}
+              {uploadError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  aria-live="assertive"
+                  className="bg-red-50 border-l-4 border-red-600 text-red-900 px-4 py-3 rounded-lg flex items-start gap-2 shadow-md"
+                >
+                  <FaExclamationCircle className="text-red-600 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <p className="text-sm font-semibold">{uploadError}</p>
+                </motion.div>
+              )}
+
+              {/* Enhanced Section Header */}
+              <div className="space-y-1 border-b border-gray-200 pb-3">
+                <h2 className="text-xl font-bold text-gray-900">Profile Information</h2>
+                <p className="text-sm text-gray-600">Update your personal details and profile picture</p>
+              </div>
+
+              {/* Enhanced Profile Picture Section - Card Style */}
+              <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 rounded-xl p-6 border border-emerald-200 shadow-lg">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+                  <div className="relative flex-shrink-0">
+                    {profileData.profilePicture ? (
+                      <div className="relative group">
+                        <img
+                          src={profileData.profilePicture}
+                          alt={`${profileData.firstName} ${profileData.lastName}'s profile picture`}
+                          className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-xl ring-2 ring-emerald-300"
+                        />
+                        {editingProfile && (
+                          <label className="absolute inset-0 bg-black/70 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer">
+                            <div className="text-center text-white">
+                              <FaCamera className="w-6 h-6 mx-auto mb-1" aria-hidden="true" />
+                              <span className="text-xs font-semibold">Change</span>
+                            </div>
+                            <input
+                              type="file"
+                              className="sr-only"
+                              accept="image/jpeg,image/jpg,image/png,image/webp"
+                              onChange={handleProfilePictureUpload}
+                              disabled={uploadingPicture}
+                              aria-label="Upload profile picture"
+                            />
+                          </label>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold border-4 border-white shadow-xl ring-2 ring-emerald-300">
+                        {profileData.firstName && profileData.lastName ? (
+                          <span aria-label={`${profileData.firstName} ${profileData.lastName} initials`}>
+                            {profileData.firstName.charAt(0).toUpperCase()}
+                            {profileData.lastName.charAt(0).toUpperCase()}
+                          </span>
+                        ) : (
+                          <FaUser className="w-12 h-12" aria-hidden="true" />
+                        )}
+                      </div>
+                    )}
+                    {uploadingPicture && (
+                      <div className="absolute inset-0 bg-white/95 rounded-full flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-1"></div>
+                          <p className="text-xs text-gray-800 font-semibold">Uploading...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 text-center md:text-left space-y-3">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">Profile Picture</h3>
+                      <p className="text-sm text-gray-700 leading-relaxed">
+                        Upload a professional profile picture to help guests recognize you. 
+                        <span className="block mt-1 text-xs text-gray-600">JPG, PNG, or WebP • Max 5MB</span>
+                      </p>
+                    </div>
+                    {editingProfile && !profileData.profilePicture && (
+                      <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg cursor-pointer transform hover:scale-105 active:scale-95 min-h-[44px]">
+                        {uploadingPicture ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            <span>Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FaCamera className="text-base" aria-hidden="true" />
+                            <span>Upload Picture</span>
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          className="sr-only"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={handleProfilePictureUpload}
+                          disabled={uploadingPicture}
+                          aria-label="Upload profile picture"
+                        />
+                      </label>
+                    )}
+                    {!editingProfile && profileData.profilePicture && (
+                      <div className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-100 text-emerald-900 rounded-lg text-sm font-semibold shadow-sm border border-emerald-300">
+                        <FaCheckCircle className="text-base" aria-hidden="true" />
+                        <span>Profile picture uploaded</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-300">
+                {!editingProfile ? (
+                  <button
+                    onClick={() => setEditingProfile(true)}
+                    aria-label="Edit your profile information"
+                    className="flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 min-h-[44px]"
+                  >
+                    <FaEdit className="text-base" aria-hidden="true" />
+                    <span>Edit Profile</span>
+                  </button>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-3 w-full">
+                    <button
+                      onClick={handleProfileUpdate}
+                      disabled={saving}
+                      aria-label="Save profile changes"
+                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 disabled:transform-none min-h-[44px]"
+                    >
+                      <FaSave className="text-base" aria-hidden="true" />
+                      <span>{saving ? 'Saving Changes...' : 'Save Changes'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (hostProfile) {
+                          setProfileData({
+                            firstName: hostProfile.firstName || '',
+                            lastName: hostProfile.lastName || '',
+                            email: hostProfile.email || user.email || '',
+                            phone: hostProfile.phone || '',
+                            bio: hostProfile.bio || '',
+                            address: hostProfile.address || '',
+                            profilePicture: hostProfile.profilePicture || ''
+                          });
+                        }
+                        setEditingProfile(false);
+                        setError('');
+                        setSuccess('');
+                        setUploadError('');
+                      }}
+                      aria-label="Cancel editing"
+                      className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 bg-gray-300 text-gray-900 font-bold text-sm rounded-lg hover:bg-gray-400 transition-all shadow-sm hover:shadow-md min-h-[44px] transform hover:scale-105 active:scale-95"
+                    >
+                      <FaTimes className="text-base" aria-hidden="true" />
+                      <span>Cancel</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Enhanced Form Fields with Better Typography */}
+              <div className="space-y-5">
+                <fieldset className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+                  <legend className="text-lg font-bold text-gray-900 mb-4 px-2">Personal Details</legend>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="firstName" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        First Name <span className="text-red-600" aria-label="required">*</span>
+                      </label>
+                      <input
+                        id="firstName"
+                        type="text"
+                        value={profileData.firstName}
+                        onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
+                        disabled={!editingProfile}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 transition-all"
+                        placeholder="Enter your first name"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="lastName" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Last Name <span className="text-red-600" aria-label="required">*</span>
+                      </label>
+                      <input
+                        id="lastName"
+                        type="text"
+                        value={profileData.lastName}
+                        onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
+                        disabled={!editingProfile}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 transition-all"
+                        placeholder="Enter your last name"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="email" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Email Address
+                      </label>
+                      <input
+                        id="email"
+                        type="email"
+                        value={profileData.email}
+                        disabled
+                        aria-describedby="email-helper"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                      />
+                      <p id="email-helper" className="text-xs text-gray-600 mt-0.5">Email cannot be changed</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="phone" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Phone Number
+                      </label>
+                      <input
+                        id="phone"
+                        type="tel"
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                        disabled={!editingProfile}
+                        aria-describedby="phone-helper"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 transition-all"
+                        placeholder="+63 912 345 6789"
+                      />
+                      <p id="phone-helper" className="text-xs text-gray-600 mt-0.5">Include country code (e.g., +63)</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="bio" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                      Bio
+                    </label>
+                    <textarea
+                      id="bio"
+                      value={profileData.bio}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, bio: e.target.value }))}
+                      disabled={!editingProfile}
+                      rows={4}
+                      aria-describedby="bio-helper"
+                      className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 transition-all resize-none"
+                      placeholder="Tell guests about yourself, your hosting experience, and what makes your property special..."
+                    />
+                    <p id="bio-helper" className="text-xs text-gray-600 mt-0.5">Help guests get to know you better (100-500 characters recommended)</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="address" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                      Address
+                    </label>
+                    <input
+                      id="address"
+                      type="text"
+                      value={profileData.address}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
+                      disabled={!editingProfile}
+                      aria-describedby="address-helper"
+                      className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:border-gray-300 transition-all"
+                      placeholder="123 Main Street, City, Province, Postal Code"
+                    />
+                    <p id="address-helper" className="text-xs text-gray-600 mt-0.5">Your full mailing address</p>
+                  </div>
+                </fieldset>
+              </div>
+            </div>
+          )}
+
+          {/* Bookings Tab - Enhanced */}
+          {activeTab === 'bookings' && (
+            <div className="space-y-6">
+              <div className="space-y-1 border-b border-gray-200 pb-3">
+                <h2 className="text-xl font-bold text-gray-900">Booking History</h2>
+                <p className="text-sm text-gray-600">View and manage all bookings from your guests</p>
+              </div>
+              <div className="space-y-4">
+                {bookings.length === 0 ? (
+                  <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 shadow-sm">
+                    <FaCalendar className="text-5xl mx-auto mb-4 text-gray-300" aria-hidden="true" />
+                    <p className="text-lg font-bold text-gray-900 mb-1">No bookings yet</p>
+                    <p className="text-sm text-gray-600">Your booking history will appear here</p>
+                  </div>
+                ) : (
+                  bookings.map((booking, index) => (
+                    <div
+                      key={booking.id || index}
+                      className="p-5 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow-md"
+                    >
+                      <div className="flex flex-col sm:flex-row justify-between gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <p className="font-bold text-base text-gray-900">{booking.listingTitle || 'Listing'}</p>
+                          <p className="text-sm text-gray-700">Guest: {booking.guestName || 'Guest'}</p>
+                          <p className="text-xs text-gray-600">
+                            <span className="font-medium">Check-in:</span>{' '}
+                            {booking.checkIn?.toDate
+                              ? booking.checkIn.toDate().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
+                              : new Date(booking.checkIn).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
+                            }
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            <span className="font-medium">Check-out:</span>{' '}
+                            {booking.checkOut?.toDate
+                              ? booking.checkOut.toDate().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
+                              : new Date(booking.checkOut).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
+                            }
+                          </p>
+                        </div>
+                        <div className="text-left sm:text-right space-y-2 flex-shrink-0">
+                          <p className="font-bold text-xl text-emerald-700">₱{(booking.totalAmount || 0).toLocaleString()}</p>
+                          <span className={`
+                            px-3 py-1.5 rounded-md text-xs font-bold inline-block uppercase tracking-wide
+                            ${booking.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
+                              : booking.status === 'confirmed'
+                              ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
+                              : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
+                            }
+                          `}>
+                            {booking.status || 'pending'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Coupons Tab - Enhanced */}
+          {activeTab === 'coupons' && (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-200 pb-3">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-bold text-gray-900">Discount Coupons</h2>
+                  <p className="text-sm text-gray-600">Create and manage promotional codes</p>
+                </div>
+                {!showCouponForm && (
+                  <button
+                    onClick={() => setShowCouponForm(true)}
+                    aria-label="Create a new coupon"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 min-h-[44px]"
+                  >
+                    <FaPlus className="text-base" aria-hidden="true" />
+                    <span>Create Coupon</span>
+                  </button>
+                )}
+              </div>
+
+              {showCouponForm && (
+                <motion.form
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onSubmit={handleCouponSubmit}
+                  className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-md space-y-4"
+                >
+                  <div className="mb-3">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">New Coupon Details</h3>
+                    <p className="text-sm text-gray-600">Fill in the information below to create a new discount code</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="couponCode" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Coupon Code <span className="text-red-600" aria-label="required">*</span>
+                      </label>
+                      <input
+                        id="couponCode"
+                        type="text"
+                        value={couponData.code}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 text-sm font-semibold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono uppercase"
+                        placeholder="SUMMER2024"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="discountType" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Discount Type <span className="text-red-600" aria-label="required">*</span>
+                      </label>
+                      <select
+                        id="discountType"
+                        value={couponData.discountType}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, discountType: e.target.value }))}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      >
+                        <option value="percentage">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (₱)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="discountValue" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Discount Value <span className="text-red-600" aria-label="required">*</span>
+                      </label>
+                      <input
+                        id="discountValue"
+                        type="number"
+                        value={couponData.discount}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, discount: e.target.value }))}
+                        required
+                        aria-required="true"
+                        min="0"
+                        step="0.01"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="10"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="minPurchase" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Minimum Purchase (₱)
+                      </label>
+                      <input
+                        id="minPurchase"
+                        type="number"
+                        value={couponData.minPurchase}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, minPurchase: e.target.value }))}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="1000 (optional)"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="validFrom" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Valid From
+                      </label>
+                      <input
+                        id="validFrom"
+                        type="date"
+                        value={couponData.validFrom}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, validFrom: e.target.value }))}
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="validUntil" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Valid Until
+                      </label>
+                      <input
+                        id="validUntil"
+                        type="date"
+                        value={couponData.validUntil}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, validUntil: e.target.value }))}
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label htmlFor="maxUses" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                        Maximum Uses
+                      </label>
+                      <input
+                        id="maxUses"
+                        type="number"
+                        value={couponData.maxUses}
+                        onChange={(e) => setCouponData(prev => ({ ...prev, maxUses: e.target.value }))}
+                        min="1"
+                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="Leave empty for unlimited"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-300">
+                    <button
+                      type="submit"
+                      aria-label="Create new coupon"
+                      className="flex-1 bg-emerald-600 text-white font-bold py-3 text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 min-h-[44px]"
+                    >
+                      Create Coupon
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCouponForm(false)}
+                      aria-label="Cancel coupon creation"
+                      className="flex-1 sm:flex-initial px-6 py-3 bg-gray-300 text-gray-900 font-bold text-sm rounded-lg hover:bg-gray-400 transition-all shadow-sm hover:shadow-md min-h-[44px] transform hover:scale-105 active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </motion.form>
+              )}
+
+              <div className="space-y-4">
+                {coupons.length === 0 ? (
+                  <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 shadow-sm">
+                    <FaTicketAlt className="text-5xl mx-auto mb-4 text-gray-300" aria-hidden="true" />
+                    <p className="text-lg font-bold text-gray-900 mb-1">No coupons created yet</p>
+                    <p className="text-sm text-gray-600">Create your first promotional coupon to attract more guests</p>
+                  </div>
+                ) : (
+                  coupons.map((coupon, index) => (
+                    <div
+                      key={coupon.id || index}
+                      className="p-5 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow-md"
+                    >
+                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div className="space-y-2 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-bold text-base text-gray-900 font-mono">{coupon.code}</p>
+                            {coupon.active && (
+                              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full border-2 border-emerald-300 uppercase tracking-wide">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-base font-semibold text-gray-700">
+                            {coupon.discountType === 'percentage'
+                              ? `${coupon.discount}% OFF`
+                              : `₱${coupon.discount} OFF`
+                            }
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            <span className="font-medium">Used:</span> {coupon.usageCount || 0} times
+                            {coupon.maxUses && ` (max: ${coupon.maxUses})`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Security Tab - New Password Change Section */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              {/* Password Success/Error Messages */}
+              {passwordSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  aria-live="polite"
+                  className="bg-emerald-50 border-l-4 border-emerald-600 text-emerald-900 px-4 py-3 rounded-lg flex items-start gap-2 shadow-md"
+                >
+                  <FaCheckCircle className="text-emerald-600 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <span className="text-sm font-semibold">{passwordSuccess}</span>
+                </motion.div>
+              )}
+              {passwordError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  role="alert"
+                  aria-live="assertive"
+                  className="bg-red-50 border-l-4 border-red-600 text-red-900 px-4 py-3 rounded-lg flex items-start gap-2 shadow-md"
+                >
+                  <FaExclamationCircle className="text-red-600 text-base mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <p className="text-sm font-semibold">{passwordError}</p>
+                </motion.div>
+              )}
+
+              {/* Section Header */}
+              <div className="space-y-1 border-b border-gray-200 pb-3">
+                <h2 className="text-xl font-bold text-gray-900">Security Settings</h2>
+                <p className="text-sm text-gray-600">Manage your account password and security</p>
+              </div>
+
+              {/* Password Change Form - Card Style */}
+              <div className="bg-gray-50 rounded-xl p-6 border border-gray-200 shadow-md">
+                <div className="mb-5">
+                  <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                    <FaLock className="text-emerald-600" aria-hidden="true" />
+                    <span>Change Password</span>
+                  </h3>
+                  <p className="text-sm text-gray-600">Update your password to keep your account secure</p>
+                </div>
+
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label htmlFor="currentPassword" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                      Current Password <span className="text-red-600" aria-label="required">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="currentPassword"
+                        type={showCurrentPassword ? "text" : "password"}
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 pr-12 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="Enter your current password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        aria-label={showCurrentPassword ? "Hide current password" : "Show current password"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        {showCurrentPassword ? <FaEyeSlash className="text-base" /> : <FaEye className="text-base" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="newPassword" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                      New Password <span className="text-red-600" aria-label="required">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                        required
+                        aria-required="true"
+                        aria-describedby="newPassword-helper"
+                        className="w-full px-4 py-2.5 pr-12 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="Enter your new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        aria-label={showNewPassword ? "Hide new password" : "Show new password"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        {showNewPassword ? <FaEyeSlash className="text-base" /> : <FaEye className="text-base" />}
+                      </button>
+                    </div>
+                    <p id="newPassword-helper" className="text-xs text-gray-600 mt-0.5">Must be at least 6 characters</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="confirmPassword" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
+                      Confirm New Password <span className="text-red-600" aria-label="required">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        required
+                        aria-required="true"
+                        className="w-full px-4 py-2.5 pr-12 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                        placeholder="Re-enter your new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        {showConfirmPassword ? <FaEyeSlash className="text-base" /> : <FaEye className="text-base" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-300">
+                    <button
+                      type="submit"
+                      disabled={changingPassword}
+                      aria-label="Change password"
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95 disabled:transform-none min-h-[44px]"
+                    >
+                      <FaLock className="text-base" aria-hidden="true" />
+                      <span>{changingPassword ? 'Changing Password...' : 'Change Password'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default HostSettings;
+

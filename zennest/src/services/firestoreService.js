@@ -1,0 +1,1270 @@
+// src/services/firestoreService.js
+import { 
+  collection, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  addDoc,
+  Timestamp,
+  serverTimestamp,
+  onSnapshot
+} from 'firebase/firestore';
+import { db } from '../config/firebase';
+
+// Host profile management
+export const createHostProfile = async (userId, hostData) => {
+  try {
+    // Check if user already has a guest profile - users can't have both
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const existingRole = userSnap.data().role;
+      if (existingRole === 'guest') {
+        console.warn('⚠️ User already has a guest profile. Cannot create host profile.');
+        throw new Error('User is already registered as a guest. Please contact support to convert your account.');
+      }
+    }
+
+    const hostRef = doc(db, 'hosts', userId);
+    await setDoc(hostRef, {
+      ...hostData,
+      role: 'host', // Explicitly set role to 'host'
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      subscriptionStatus: hostData.subscriptionStatus || 'pending', // Will be 'active' after payment
+      subscriptionStartDate: hostData.subscriptionStatus === 'active' ? serverTimestamp() : null,
+      points: 0,
+      totalEarnings: 0
+    });
+    console.log('✅ Host profile created successfully for user:', userId);
+    return { success: true, id: userId };
+  } catch (error) {
+    console.error('❌ Error creating host profile:', error);
+    throw error;
+  }
+};
+
+export const getHostProfile = async (userId) => {
+  try {
+    if (!userId) {
+      console.error('❌ getHostProfile: User ID is required');
+      return { success: false, data: null, error: 'User ID is required' };
+    }
+
+    console.log('🔍 Fetching host profile for user:', userId);
+    const hostRef = doc(db, 'hosts', userId);
+    const hostSnap = await getDoc(hostRef);
+    
+    if (hostSnap.exists()) {
+      const data = hostSnap.data();
+      console.log('✅ Host profile found:', { 
+        hasProfilePicture: !!data.profilePicture,
+        firstName: data.firstName,
+        lastName: data.lastName 
+      });
+      return { success: true, data: data };
+    } else {
+      console.warn('⚠️ Host profile does not exist for user:', userId);
+      return { success: false, data: null, error: 'Host profile not found' };
+    }
+  } catch (error) {
+    console.error('❌ Error getting host profile:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.message || 'Failed to fetch host profile',
+      code: error.code 
+    };
+  }
+};
+
+export const updateHostProfile = async (userId, updates) => {
+  try {
+    if (!userId) {
+      throw new Error('User ID is required to update host profile');
+    }
+
+    console.log('Updating host profile for user:', userId);
+    console.log('Update data:', updates);
+    
+    const hostRef = doc(db, 'hosts', userId);
+    
+    // Prepare clean update data
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp()
+    };
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+    
+    console.log('Sending update to Firestore:', updateData);
+    await updateDoc(hostRef, updateData);
+    console.log('✅ Host profile updated successfully');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error updating host profile:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
+    return {
+      success: false,
+      error: error.message || 'Failed to update host profile',
+      code: error.code
+    };
+  }
+};
+
+// Listing management
+export const createListing = async (listingData) => {
+  try {
+    console.log('createListing called with:', listingData);
+    
+    // Validate required fields
+    if (!listingData.hostId) {
+      throw new Error('Host ID is required to create a listing');
+    }
+    if (!listingData.title || !listingData.title.trim()) {
+      throw new Error('Listing title is required');
+    }
+    
+    const listingsRef = collection(db, 'listings');
+    
+    // Prepare the document data - ensure all required fields are present
+    const docData = {
+      title: listingData.title.trim(),
+      category: listingData.category || 'home',
+      description: listingData.description?.trim() || '',
+      location: listingData.location?.trim() || '',
+      hostId: listingData.hostId,
+      rate: parseFloat(listingData.rate) || 0,
+      discount: parseFloat(listingData.discount) || 0,
+      bedrooms: parseInt(listingData.bedrooms) || 0,
+      bathrooms: parseFloat(listingData.bathrooms) || 0,
+      guests: parseInt(listingData.guests) || 0,
+      images: Array.isArray(listingData.images) ? listingData.images : [],
+      promo: listingData.promo?.trim() || '',
+      amenities: Array.isArray(listingData.amenities) ? listingData.amenities : [],
+      status: listingData.status || 'draft', // 'draft' or 'published'
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      views: 0,
+      bookings: 0,
+      rating: 0,
+      reviews: []
+    };
+    
+    console.log('Adding document to Firestore with data:', docData);
+    const docRef = await addDoc(listingsRef, docData);
+    console.log('✅ Document created successfully with ID:', docRef.id);
+    
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('❌ Error creating listing:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
+    // Return error instead of throwing to allow better error handling in component
+    return { 
+      success: false, 
+      error: error.message || 'Failed to create listing',
+      code: error.code 
+    };
+  }
+};
+
+export const updateListing = async (listingId, updates) => {
+  try {
+    if (!listingId) {
+      throw new Error('Listing ID is required to update a listing');
+    }
+    
+    const listingRef = doc(db, 'listings', listingId);
+    
+    // Prepare clean update data
+    const updateData = {
+      ...updates,
+      // Ensure string fields are trimmed
+      title: updates.title?.trim() || updates.title,
+      description: updates.description?.trim() || updates.description,
+      location: updates.location?.trim() || updates.location,
+      promo: updates.promo?.trim() || updates.promo || '',
+      // Ensure numeric fields are properly converted
+      rate: parseFloat(updates.rate) || 0,
+      discount: parseFloat(updates.discount) || 0,
+      bedrooms: parseInt(updates.bedrooms) || 0,
+      bathrooms: parseFloat(updates.bathrooms) || 0,
+      guests: parseInt(updates.guests) || 0,
+      // Ensure arrays are arrays
+      images: Array.isArray(updates.images) ? updates.images : [],
+      amenities: Array.isArray(updates.amenities) ? updates.amenities : [],
+      updatedAt: serverTimestamp()
+    };
+    
+    console.log('Updating listing:', listingId, 'with data:', updateData);
+    await updateDoc(listingRef, updateData);
+    console.log('✅ Listing updated successfully');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error updating listing:', error);
+    console.error('Error code:', error.code);
+    console.error('Error message:', error.message);
+    
+    // Return error instead of throwing
+    return { 
+      success: false, 
+      error: error.message || 'Failed to update listing',
+      code: error.code 
+    };
+  }
+};
+
+export const getHostListings = async (hostId) => {
+  try {
+    const listingsRef = collection(db, 'listings');
+    
+    // Try with orderBy first (requires index)
+    try {
+      const q = query(listingsRef, where('hostId', '==', hostId), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const listings = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        listings.push({ 
+          id: doc.id, 
+          ...data,
+          // Convert Timestamp to Date for sorting
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
+        });
+      });
+      return { success: true, data: listings };
+    } catch (orderByError) {
+      // If index error, fetch without orderBy and sort in memory
+      if (orderByError.code === 'failed-precondition' && orderByError.message?.includes('index')) {
+        console.warn('Firestore index not found. Fetching without orderBy and sorting in memory...');
+        console.warn('To create the index, visit:', orderByError.message.match(/https:\/\/[^\s]+/)?.[0] || 'Firebase Console');
+        
+        const q = query(listingsRef, where('hostId', '==', hostId));
+        const querySnapshot = await getDocs(q);
+        const listings = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          listings.push({ 
+            id: doc.id, 
+            ...data,
+            // Convert Timestamp to Date for sorting
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(0)
+          });
+        });
+        
+        // Sort by createdAt descending in memory
+        listings.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+          const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+          return dateB - dateA; // Descending order
+        });
+        
+        return { success: true, data: listings };
+      }
+      // If it's a different error, throw it
+      throw orderByError;
+    }
+  } catch (error) {
+    console.error('Error getting host listings:', error);
+    throw error;
+  }
+};
+
+// Get published listings for guests/users (filtered by category)
+export const getPublishedListings = async (category = null) => {
+  try {
+    const listingsRef = collection(db, 'listings');
+    
+    // Try with orderBy first (requires index)
+    try {
+      let q;
+      
+      if (category) {
+        // Get published listings for a specific category
+        q = query(
+          listingsRef, 
+          where('status', '==', 'published'),
+          where('category', '==', category),
+          orderBy('createdAt', 'desc')
+        );
+      } else {
+        // Get all published listings
+        q = query(
+          listingsRef, 
+          where('status', '==', 'published'),
+          orderBy('createdAt', 'desc')
+        );
+      }
+      
+      const querySnapshot = await getDocs(q);
+      const listings = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        listings.push({ 
+          id: doc.id, 
+          ...data,
+          // Handle Timestamp conversion for display
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(0),
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+        });
+      });
+      return { success: true, data: listings };
+    } catch (orderByError) {
+      // If index error, fetch without orderBy and sort in memory
+      if (orderByError.code === 'failed-precondition' && orderByError.message?.includes('index')) {
+        console.warn('Firestore index not found for published listings. Fetching without orderBy and sorting in memory...');
+        console.warn('To create the index, visit:', orderByError.message.match(/https:\/\/[^\s]+/)?.[0] || 'Firebase Console');
+        
+        let q;
+        if (category) {
+          q = query(
+            listingsRef,
+            where('status', '==', 'published'),
+            where('category', '==', category)
+          );
+        } else {
+          q = query(
+            listingsRef,
+            where('status', '==', 'published')
+          );
+        }
+        
+        const querySnapshot = await getDocs(q);
+        const listings = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          listings.push({ 
+            id: doc.id, 
+            ...data,
+            // Handle Timestamp conversion for display
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(0),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
+          });
+        });
+        
+        // Sort by createdAt descending in memory
+        listings.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+          const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+          return dateB - dateA; // Descending order
+        });
+        
+        return { success: true, data: listings };
+      }
+      // If it's a different error, throw it
+      throw orderByError;
+    }
+  } catch (error) {
+    console.error('Error getting published listings:', error);
+    throw error;
+  }
+};
+
+export const deleteListing = async (listingId) => {
+  try {
+    const listingRef = doc(db, 'listings', listingId);
+    await deleteDoc(listingRef);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting listing:', error);
+    throw error;
+  }
+};
+
+// Bookings management
+export const getHostBookings = async (hostId, status = null) => {
+  try {
+    if (!hostId) {
+      return { success: false, data: [], error: 'Host ID is required' };
+    }
+
+    const bookingsRef = collection(db, 'bookings');
+    
+    // Try with orderBy first (requires index)
+    try {
+      let q;
+      if (status) {
+        q = query(
+          bookingsRef, 
+          where('hostId', '==', hostId),
+          where('status', '==', status),
+          orderBy('checkIn', 'desc')
+        );
+      } else {
+        q = query(
+          bookingsRef, 
+          where('hostId', '==', hostId),
+          orderBy('checkIn', 'desc')
+        );
+      }
+      const querySnapshot = await getDocs(q);
+      const bookings = [];
+      querySnapshot.forEach((doc) => {
+        bookings.push({ id: doc.id, ...doc.data() });
+      });
+      return { success: true, data: bookings };
+    } catch (orderByError) {
+      // If index error, fetch without orderBy and sort in memory
+      if (orderByError.code === 'failed-precondition' && orderByError.message?.includes('index')) {
+        console.warn('Firestore index not found for bookings. Fetching without orderBy...');
+        
+        let q;
+        if (status) {
+          q = query(
+            bookingsRef,
+            where('hostId', '==', hostId),
+            where('status', '==', status)
+          );
+        } else {
+          q = query(
+            bookingsRef,
+            where('hostId', '==', hostId)
+          );
+        }
+        
+        const querySnapshot = await getDocs(q);
+        const bookings = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          bookings.push({ 
+            id: doc.id, 
+            ...data,
+            checkIn: data.checkIn?.toDate ? data.checkIn.toDate() : data.checkIn
+          });
+        });
+        
+        // Sort by checkIn descending in memory
+        bookings.sort((a, b) => {
+          const dateA = a.checkIn instanceof Date ? a.checkIn.getTime() : 0;
+          const dateB = b.checkIn instanceof Date ? b.checkIn.getTime() : 0;
+          return dateB - dateA;
+        });
+        
+        return { success: true, data: bookings };
+      }
+      throw orderByError;
+    }
+  } catch (error) {
+    console.error('❌ Error getting host bookings:', error);
+    return { 
+      success: false, 
+      data: [], 
+      error: error.message || 'Failed to fetch bookings',
+      code: error.code 
+    };
+  }
+};
+
+export const updateBookingStatus = async (bookingId, status) => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, {
+      status,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating booking status:', error);
+    throw error;
+  }
+};
+
+// Messages & Conversations Management
+// Create or get a conversation between guest and host for a listing
+export const getOrCreateConversation = async (guestId, hostId, listingId, listingTitle) => {
+  try {
+    // Create a unique conversation ID based on guest, host, and listing
+    const conversationId = `${guestId}_${hostId}_${listingId}`;
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+
+    if (conversationSnap.exists()) {
+      return { success: true, data: { id: conversationSnap.id, ...conversationSnap.data() } };
+    } else {
+      // Create new conversation
+      await setDoc(conversationRef, {
+        guestId,
+        hostId,
+        listingId,
+        listingTitle: listingTitle || 'Listing',
+        participants: [guestId, hostId],
+        lastMessage: null,
+        lastMessageAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        unreadCount: { [guestId]: 0, [hostId]: 0 }
+      });
+      return { success: true, data: { id: conversationId, guestId, hostId, listingId, listingTitle } };
+    }
+  } catch (error) {
+    console.error('Error getting or creating conversation:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get all conversations for a user (guest or host)
+export const getUserConversations = async (userId, userType = 'guest') => {
+  try {
+    const conversationsRef = collection(db, 'conversations');
+    const field = userType === 'guest' ? 'guestId' : 'hostId';
+    const q = query(
+      conversationsRef,
+      where(field, '==', userId),
+      orderBy('lastMessageAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const conversations = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      conversations.push({
+        id: doc.id,
+        ...data,
+        lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt
+      });
+    });
+    
+    return { success: true, data: conversations };
+  } catch (error) {
+    console.error('Error getting conversations:', error);
+    // Fallback: try without orderBy if index is missing
+    try {
+      const conversationsRef = collection(db, 'conversations');
+      const field = userType === 'guest' ? 'guestId' : 'hostId';
+      const q = query(conversationsRef, where(field, '==', userId));
+      const querySnapshot = await getDocs(q);
+      const conversations = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        conversations.push({
+          id: doc.id,
+          ...data,
+          lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt
+        });
+      });
+      // Sort in memory
+      conversations.sort((a, b) => {
+        const dateA = a.lastMessageAt ? (a.lastMessageAt instanceof Date ? a.lastMessageAt : a.lastMessageAt.toDate()) : new Date(0);
+        const dateB = b.lastMessageAt ? (b.lastMessageAt instanceof Date ? b.lastMessageAt : b.lastMessageAt.toDate()) : new Date(0);
+        return dateB - dateA;
+      });
+      return { success: true, data: conversations };
+    } catch (fallbackError) {
+      return { success: false, error: fallbackError.message, data: [] };
+    }
+  }
+};
+
+// Send a message in a conversation
+export const sendConversationMessage = async (conversationId, senderId, senderName, senderType, messageText, listingId, listingTitle) => {
+  try {
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const messageData = {
+      senderId,
+      senderName: senderName || 'User',
+      senderType, // 'guest' or 'host'
+      text: messageText,
+      read: false,
+      createdAt: serverTimestamp(),
+      listingId,
+      listingTitle
+    };
+    
+    const docRef = await addDoc(messagesRef, messageData);
+    
+    // Update conversation's last message and timestamp
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (conversationSnap.exists()) {
+      const convData = conversationSnap.data();
+      const unreadCount = { ...convData.unreadCount };
+      
+      // Increment unread count for the recipient
+      if (senderType === 'guest') {
+        unreadCount[convData.hostId] = (unreadCount[convData.hostId] || 0) + 1;
+      } else {
+        unreadCount[convData.guestId] = (unreadCount[convData.guestId] || 0) + 1;
+      }
+      
+      await updateDoc(conversationRef, {
+        lastMessage: messageText,
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        unreadCount
+      });
+    }
+    
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('Error sending message:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Delete a message
+export const deleteMessage = async (conversationId, messageId) => {
+  try {
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    await deleteDoc(messageRef);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Mark messages as read
+export const markConversationAsRead = async (conversationId, userId) => {
+  try {
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (conversationSnap.exists()) {
+      const convData = conversationSnap.data();
+      const unreadCount = { ...convData.unreadCount };
+      unreadCount[userId] = 0;
+      
+      await updateDoc(conversationRef, {
+        unreadCount,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking conversation as read:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Delete a conversation
+export const deleteConversation = async (conversationId) => {
+  try {
+    // First delete all messages in subcollection
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const messagesSnapshot = await getDocs(messagesRef);
+    
+    const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+    
+    // Then delete the conversation
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await deleteDoc(conversationRef);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Real-time listener for conversations (for a user)
+export const subscribeToUserConversations = (userId, userType, callback) => {
+  try {
+    const conversationsRef = collection(db, 'conversations');
+    const field = userType === 'guest' ? 'guestId' : 'hostId';
+    const q = query(
+      conversationsRef,
+      where(field, '==', userId)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const conversations = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        conversations.push({
+          id: doc.id,
+          ...data,
+          lastMessageAt: data.lastMessageAt?.toDate ? data.lastMessageAt.toDate() : data.lastMessageAt,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
+        });
+      });
+      
+      // Sort by lastMessageAt
+      conversations.sort((a, b) => {
+        const dateA = a.lastMessageAt || a.createdAt || new Date(0);
+        const dateB = b.lastMessageAt || b.createdAt || new Date(0);
+        const dateAObj = dateA instanceof Date ? dateA : (dateA?.toDate ? dateA.toDate() : new Date(dateA));
+        const dateBObj = dateB instanceof Date ? dateB : (dateB?.toDate ? dateB.toDate() : new Date(dateB));
+        return dateBObj - dateAObj;
+      });
+      
+      callback({ success: true, data: conversations });
+    }, (error) => {
+      console.error('Error in conversations subscription:', error);
+      callback({ success: false, error: error.message, data: [] });
+    });
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up conversations subscription:', error);
+    callback({ success: false, error: error.message, data: [] });
+    return () => {}; // Return empty unsubscribe function
+  }
+};
+
+// Real-time listener for messages in a conversation
+export const subscribeToMessages = (conversationId, callback) => {
+  try {
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const q = query(messagesRef, orderBy('createdAt', 'asc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        messages.push({
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
+        });
+      });
+      
+      callback({ success: true, data: messages });
+    }, (error) => {
+      console.error('Error in messages subscription:', error);
+      callback({ success: false, error: error.message, data: [] });
+    });
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up messages subscription:', error);
+    callback({ success: false, error: error.message, data: [] });
+    return () => {}; // Return empty unsubscribe function
+  }
+};
+
+// Typing indicator management
+export const setTypingStatus = async (conversationId, userId, isTyping) => {
+  try {
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const updateData = {};
+    updateData[`typing.${userId}`] = isTyping ? serverTimestamp() : null;
+    
+    await updateDoc(conversationRef, updateData);
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting typing status:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Real-time listener for typing status
+export const subscribeToTypingStatus = (conversationId, currentUserId, callback) => {
+  try {
+    const conversationRef = doc(db, 'conversations', conversationId);
+    
+    const unsubscribe = onSnapshot(conversationRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        const typing = data.typing || {};
+        
+        // Get all users who are typing (except current user)
+        const typingUsers = Object.keys(typing).filter(userId => 
+          userId !== currentUserId && typing[userId] !== null
+        );
+        
+        // Check if typing status is recent (within last 3 seconds)
+        const now = new Date();
+        const recentTypingUsers = typingUsers.filter(userId => {
+          const typingTime = typing[userId];
+          if (!typingTime) return false;
+          const time = typingTime.toDate ? typingTime.toDate() : new Date(typingTime);
+          return (now - time) < 3000; // 3 seconds
+        });
+        
+        callback({ success: true, isTyping: recentTypingUsers.length > 0, typingUsers: recentTypingUsers });
+      } else {
+        callback({ success: true, isTyping: false, typingUsers: [] });
+      }
+    }, (error) => {
+      console.error('Error in typing status subscription:', error);
+      callback({ success: false, isTyping: false, typingUsers: [] });
+    });
+    
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up typing status subscription:', error);
+    callback({ success: false, isTyping: false, typingUsers: [] });
+    return () => {};
+  }
+};
+
+// Legacy functions for backward compatibility (host messages)
+export const getHostMessages = async (hostId) => {
+  try {
+    const result = await getUserConversations(hostId, 'host');
+    return result;
+  } catch (error) {
+    console.error('Error getting host messages:', error);
+    return { success: false, data: [], error: error.message };
+  }
+};
+
+export const sendMessage = async (messageData) => {
+  try {
+    // Legacy support - try to find or create conversation
+    const { guestId, hostId, listingId, senderId, senderName, message, listingTitle } = messageData;
+    const senderType = senderId === hostId ? 'host' : 'guest';
+    
+    const convResult = await getOrCreateConversation(guestId, hostId, listingId, listingTitle);
+    if (!convResult.success) {
+      throw new Error('Failed to create conversation');
+    }
+    
+    const result = await sendConversationMessage(
+      convResult.data.id,
+      senderId,
+      senderName,
+      senderType,
+      message,
+      listingId,
+      listingTitle
+    );
+    
+    return result;
+  } catch (error) {
+    console.error('Error sending message:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Coupons management
+export const createCoupon = async (couponData) => {
+  try {
+    const couponsRef = collection(db, 'coupons');
+    const docRef = await addDoc(couponsRef, {
+      ...couponData,
+      createdAt: serverTimestamp(),
+      usageCount: 0,
+      active: true
+    });
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('Error creating coupon:', error);
+    throw error;
+  }
+};
+
+export const getHostCoupons = async (hostId) => {
+  try {
+    if (!hostId) {
+      return { success: false, data: [], error: 'Host ID is required' };
+    }
+
+    const couponsRef = collection(db, 'coupons');
+    
+    // Try with orderBy first (requires index)
+    try {
+      const q = query(couponsRef, where('hostId', '==', hostId), orderBy('createdAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      const coupons = [];
+      querySnapshot.forEach((doc) => {
+        coupons.push({ id: doc.id, ...doc.data() });
+      });
+      return { success: true, data: coupons };
+    } catch (orderByError) {
+      // If index error, fetch without orderBy and sort in memory
+      if (orderByError.code === 'failed-precondition' && orderByError.message?.includes('index')) {
+        console.warn('Firestore index not found for coupons. Fetching without orderBy...');
+        
+        const q = query(couponsRef, where('hostId', '==', hostId));
+        const querySnapshot = await getDocs(q);
+        const coupons = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          coupons.push({ 
+            id: doc.id, 
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt || new Date(0)
+          });
+        });
+        
+        // Sort by createdAt descending in memory
+        coupons.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+          const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+          return dateB - dateA;
+        });
+        
+        return { success: true, data: coupons };
+      }
+      throw orderByError;
+    }
+  } catch (error) {
+    console.error('❌ Error getting host coupons:', error);
+    return { 
+      success: false, 
+      data: [], 
+      error: error.message || 'Failed to fetch coupons',
+      code: error.code 
+    };
+  }
+};
+
+// Check if email exists in Firestore (users or hosts collections)
+export const checkEmailExists = async (email) => {
+  try {
+    if (!email || !email.trim()) {
+      return { success: false, exists: false, error: 'Email is required' };
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const usersRef = collection(db, 'users');
+    const hostsRef = collection(db, 'hosts');
+
+    // Check in users collection
+    const usersQuery = query(usersRef, where('email', '==', trimmedEmail));
+    const usersSnapshot = await getDocs(usersQuery);
+    
+    if (!usersSnapshot.empty) {
+      console.log('✅ Email found in users collection');
+      return { success: true, exists: true, collection: 'users' };
+    }
+
+    // Check in hosts collection
+    const hostsQuery = query(hostsRef, where('email', '==', trimmedEmail));
+    const hostsSnapshot = await getDocs(hostsQuery);
+    
+    if (!hostsSnapshot.empty) {
+      console.log('✅ Email found in hosts collection');
+      return { success: true, exists: true, collection: 'hosts' };
+    }
+
+    console.log('ℹ️ Email not found in Firestore');
+    return { success: true, exists: false };
+  } catch (error) {
+    console.error('❌ Error checking email in Firestore:', error);
+    // If it's an index error, we can't check - return exists: false to allow registration
+    if (error.code === 'failed-precondition') {
+      console.warn('⚠️ Firestore index missing for email query. Allowing registration to proceed.');
+      return { success: true, exists: false, warning: 'Index missing' };
+    }
+    // For other errors, assume email doesn't exist to allow registration
+    return { success: false, exists: false, error: error.message };
+  }
+};
+
+// User Profile Management (for guests/non-hosts)
+export const getGuestProfile = async (userId) => {
+  try {
+    if (!userId) {
+      return { success: false, data: null, error: 'User ID is required' };
+    }
+
+    console.log('🔍 Fetching guest profile for user:', userId);
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      console.log('✅ Guest profile found', {
+        hasFirstName: !!data.firstName,
+        hasLastName: !!data.lastName,
+        hasProfilePicture: !!data.profilePicture,
+        hasEmail: !!data.email,
+        hasDisplayName: !!data.displayName,
+        allFields: Object.keys(data)
+      });
+      return { success: true, data: data };
+    } else {
+      console.warn('⚠️ Guest profile does not exist for user:', userId);
+      return { success: false, data: null, error: 'User profile not found' };
+    }
+  } catch (error) {
+    console.error('❌ Error getting guest profile:', error);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.message || 'Failed to fetch user profile',
+      code: error.code 
+    };
+  }
+};
+
+export const createUserProfile = async (userId, userData) => {
+  try {
+    // Check if user already has a host profile - users can't have both
+    const hostRef = doc(db, 'hosts', userId);
+    const hostSnap = await getDoc(hostRef);
+    
+    if (hostSnap.exists()) {
+      console.warn('⚠️ User already has a host profile. Cannot create guest profile.');
+      throw new Error('User is already registered as a host. Cannot create guest profile.');
+    }
+
+    const userRef = doc(db, 'users', userId);
+    await setDoc(userRef, {
+      ...userData,
+      role: 'guest', // Explicitly set role to 'guest'
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      favorites: []
+    });
+    console.log('✅ Guest profile created successfully');
+    return { success: true, id: userId };
+  } catch (error) {
+    console.error('❌ Error creating user profile:', error);
+    throw error;
+  }
+};
+
+export const updateUserProfile = async (userId, updates) => {
+  try {
+    if (!userId) {
+      throw new Error('User ID is required to update user profile');
+    }
+
+    console.log('Updating user profile for user:', userId);
+    const userRef = doc(db, 'users', userId);
+    
+    const updateData = {
+      ...updates,
+      updatedAt: serverTimestamp()
+    };
+    
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+    
+    await updateDoc(userRef, updateData);
+    console.log('✅ User profile updated successfully');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error updating user profile:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to update user profile',
+      code: error.code
+    };
+  }
+};
+
+// Favorites Management
+export const getUserFavorites = async (userId) => {
+  try {
+    if (!userId) {
+      return { success: false, data: [], error: 'User ID is required' };
+    }
+
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      const favorites = userData.favorites || [];
+      return { success: true, data: favorites };
+    } else {
+      // Profile should have been created during registration/sign-in
+      // But as a fallback, create minimal profile
+      // The App.jsx useEffect will populate it with full data if needed
+      console.warn('⚠️ User profile not found when getting favorites, creating minimal profile');
+      await createUserProfile(userId, {
+        email: '', // Will be updated when user data is available
+        favorites: []
+      });
+      return { success: true, data: [] };
+    }
+  } catch (error) {
+    console.error('❌ Error getting user favorites:', error);
+    return {
+      success: false,
+      data: [],
+      error: error.message || 'Failed to fetch favorites',
+      code: error.code
+    };
+  }
+};
+
+export const addToFavorites = async (userId, listingId) => {
+  try {
+    if (!userId || !listingId) {
+      return { success: false, error: 'User ID and Listing ID are required' };
+    }
+
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    let favorites = [];
+    if (userSnap.exists()) {
+      favorites = userSnap.data().favorites || [];
+    } else {
+      // Profile should have been created during registration/sign-in
+      // But as a fallback, create minimal profile
+      // The App.jsx useEffect will populate it with full data if needed
+      console.warn('⚠️ User profile not found when adding to favorites, creating minimal profile');
+      await createUserProfile(userId, {
+        email: '', // Will be updated when user data is available
+        favorites: []
+      });
+    }
+    
+    if (!favorites.includes(listingId)) {
+      favorites.push(listingId);
+      await updateDoc(userRef, {
+        favorites: favorites,
+        updatedAt: serverTimestamp()
+      });
+      console.log('✅ Added to favorites');
+      return { success: true };
+    } else {
+      return { success: true, message: 'Already in favorites' };
+    }
+  } catch (error) {
+    console.error('❌ Error adding to favorites:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to add to favorites'
+    };
+  }
+};
+
+export const removeFromFavorites = async (userId, listingId) => {
+  try {
+    if (!userId || !listingId) {
+      return { success: false, error: 'User ID and Listing ID are required' };
+    }
+
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      return { success: false, error: 'User profile not found' };
+    }
+    
+    let favorites = userSnap.data().favorites || [];
+    favorites = favorites.filter(id => id !== listingId);
+    
+    await updateDoc(userRef, {
+      favorites: favorites,
+      updatedAt: serverTimestamp()
+    });
+    console.log('✅ Removed from favorites');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error removing from favorites:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to remove from favorites'
+    };
+  }
+};
+
+export const toggleFavorite = async (userId, listingId) => {
+  try {
+    const favoritesResult = await getUserFavorites(userId);
+    if (!favoritesResult.success) {
+      return { success: false, error: 'Failed to fetch favorites' };
+    }
+    
+    const favorites = favoritesResult.data || [];
+    const isFavorite = favorites.includes(listingId);
+    
+    if (isFavorite) {
+      return await removeFromFavorites(userId, listingId);
+    } else {
+      return await addToFavorites(userId, listingId);
+    }
+  } catch (error) {
+    console.error('❌ Error toggling favorite:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to toggle favorite'
+    };
+  }
+};
+
+// Points & Rewards
+export const updateHostPoints = async (userId, points, reason) => {
+  try {
+    const hostRef = doc(db, 'hosts', userId);
+    const hostSnap = await getDoc(hostRef);
+    const currentPoints = hostSnap.data()?.points || 0;
+    const newPoints = currentPoints + points;
+    
+    await updateDoc(hostRef, {
+      points: newPoints,
+      updatedAt: serverTimestamp()
+    });
+
+    // Log points transaction
+    const pointsRef = collection(db, 'pointsTransactions');
+    await addDoc(pointsRef, {
+      hostId: userId,
+      points,
+      reason,
+      balance: newPoints,
+      createdAt: serverTimestamp()
+    });
+
+    return { success: true, newPoints };
+  } catch (error) {
+    console.error('Error updating host points:', error);
+    throw error;
+  }
+};
+
+// Payment methods
+export const updatePaymentMethods = async (userId, paymentMethods) => {
+  try {
+    const hostRef = doc(db, 'hosts', userId);
+    await updateDoc(hostRef, {
+      paymentMethods,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating payment methods:', error);
+    throw error;
+  }
+};
+
+// Subscription management
+export const updateSubscriptionStatus = async (userId, status, paymentId = null) => {
+  try {
+    const hostRef = doc(db, 'hosts', userId);
+    const updateData = {
+      subscriptionStatus: status,
+      updatedAt: serverTimestamp()
+    };
+    
+    if (paymentId) {
+      updateData.subscriptionPaymentId = paymentId;
+    }
+    
+    if (status === 'active') {
+      updateData.subscriptionStartDate = serverTimestamp();
+    }
+
+    await updateDoc(hostRef, updateData);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating subscription status:', error);
+    throw error;
+  }
+};
+

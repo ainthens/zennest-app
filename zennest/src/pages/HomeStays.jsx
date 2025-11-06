@@ -1,0 +1,513 @@
+// HomeStays.jsx
+import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { getPublishedListings, getUserFavorites, toggleFavorite } from "../services/firestoreService";
+import HomeStayCard from "../components/HomeStayCard";
+import Filters from "../components/Filters";
+import Hero from "../components/Hero";
+import { motion } from "framer-motion";
+import { useInView } from "react-intersection-observer";
+import useAuth from "../hooks/useAuth";
+
+// Animation variants
+const fadeInUp = {
+  hidden: { opacity: 0, y: 30 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }
+  }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
+  }
+};
+
+// Animated component wrappers
+const AnimatedSection = ({ children, className = "" }) => {
+  const [ref, inView] = useInView({
+    triggerOnce: true,
+    threshold: 0.05,
+    rootMargin: "0px 0px -50px 0px"
+  });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      variants={fadeInUp}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const AnimatedGrid = ({ children, className = "" }) => {
+  const [ref, inView] = useInView({
+    triggerOnce: true,
+    threshold: 0.05,
+    rootMargin: "0px 0px -100px 0px"
+  });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      variants={staggerContainer}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const AnimatedCard = ({ children, className = "", delay = 0 }) => {
+  const [ref, inView] = useInView({
+    triggerOnce: true,
+    threshold: 0.05,
+    rootMargin: "0px 0px -50px 0px"
+  });
+
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      variants={scaleIn}
+      transition={{ duration: 0.3, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const HomeStays = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({ location: "", guests: 0, locationSelect: "" });
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [priceRange, setPriceRange] = useState("all");
+  const [favorites, setFavorites] = useState(() => new Set());
+  const [sortBy, setSortBy] = useState("featured");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 6;
+
+  // HomeStay categories
+  const homeStayCategories = ['apartment', 'house', 'villa', 'condo', 'studio', 'other'];
+  const categoryLabels = {
+    apartment: 'Apartment',
+    house: 'House',
+    villa: 'Villa',
+    condo: 'Condo',
+    studio: 'Studio',
+    other: 'Other'
+  };
+
+  // Price range options
+  const priceRangeOptions = [
+    { value: 'low', label: 'Under ₱1,000/night' },
+    { value: 'medium', label: '₱1,000 - ₱3,000/night' },
+    { value: 'high', label: 'Over ₱3,000/night' }
+  ];
+
+  // Sort options
+  const sortOptions = [
+    { value: 'featured', label: 'Featured' },
+    { value: 'price-low', label: 'Price: Low to High' },
+    { value: 'price-high', label: 'Price: High to Low' },
+    { value: 'rating', label: 'Highest Rated' },
+    { value: 'guests', label: 'Most Guests' }
+  ];
+
+  // Fetch published listings from Firestore
+  useEffect(() => {
+    const fetchListings = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching published home listings...');
+        const result = await getPublishedListings('home');
+        
+        if (result && result.success && result.data) {
+          console.log(`✅ Found ${result.data.length} published listings`);
+          
+          // Map Firestore data to match HomeStayCard format
+          const mappedListings = result.data.map(listing => ({
+            id: listing.id,
+            title: listing.title || 'Untitled Listing',
+            location: listing.location || '',
+            pricePerNight: listing.rate || 0,
+            discount: listing.discount || 0,
+            rating: listing.rating || 0,
+            image: listing.images && listing.images.length > 0 ? listing.images[0] : null,
+            guests: listing.guests || 1,
+            bedrooms: listing.bedrooms || 0,
+            bathrooms: listing.bathrooms || 0,
+            description: listing.description || '',
+            images: listing.images || [],
+            hostId: listing.hostId
+          }));
+          
+          setListings(mappedListings);
+          console.log(`✅ Mapped ${mappedListings.length} listings successfully`);
+        } else {
+          console.warn('No listings data returned:', result);
+          setListings([]);
+        }
+      } catch (error) {
+        console.error('❌ Error fetching listings:', error);
+        console.error('Error details:', {
+          code: error.code,
+          message: error.message
+        });
+        setListings([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchListings();
+  }, []);
+
+  // Fetch user favorites from Firestore
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      if (user?.uid) {
+        try {
+          const result = await getUserFavorites(user.uid);
+          if (result.success && result.data) {
+            setFavorites(new Set(result.data));
+          }
+        } catch (error) {
+          console.error('Error fetching favorites:', error);
+        }
+      }
+    };
+
+    fetchFavorites();
+  }, [user]);
+
+  // compute unique locations for filter dropdown
+  const locations = useMemo(() => {
+    return Array.from(new Set(listings.map((h) => h.location).filter(Boolean)));
+  }, [listings]);
+
+  // Extract categories from listings
+  const categories = useMemo(() => {
+    const cats = new Set();
+    listings.forEach(listing => {
+      // Extract category from title or description
+      const title = (listing.title || '').toLowerCase();
+      const desc = (listing.description || '').toLowerCase();
+      
+      if (title.includes('apartment') || desc.includes('apartment')) {
+        cats.add('apartment');
+      } else if (title.includes('villa') || desc.includes('villa')) {
+        cats.add('villa');
+      } else if (title.includes('condo') || desc.includes('condo')) {
+        cats.add('condo');
+      } else if (title.includes('studio') || desc.includes('studio')) {
+        cats.add('studio');
+      } else if (title.includes('house') || desc.includes('house') || desc.includes('home')) {
+        cats.add('house');
+      } else {
+        cats.add('other');
+      }
+    });
+    return Array.from(cats);
+  }, [listings]);
+
+  const filtered = useMemo(() => {
+    let results = listings.filter((h) => {
+      // Location search filter
+      if (filters.location && !h.location.toLowerCase().includes(filters.location.toLowerCase())) return false;
+      
+      // Location select filter
+      if (filters.locationSelect && h.location !== filters.locationSelect) return false;
+      
+      // Guests filter
+      if (filters.guests && h.guests < filters.guests) return false;
+
+      // Category filter
+      if (selectedCategory !== 'all') {
+        const title = (h.title || '').toLowerCase();
+        const desc = (h.description || '').toLowerCase();
+        let listingCategory = 'other';
+        
+        if (title.includes('apartment') || desc.includes('apartment')) {
+          listingCategory = 'apartment';
+        } else if (title.includes('villa') || desc.includes('villa')) {
+          listingCategory = 'villa';
+        } else if (title.includes('condo') || desc.includes('condo')) {
+          listingCategory = 'condo';
+        } else if (title.includes('studio') || desc.includes('studio')) {
+          listingCategory = 'studio';
+        } else if (title.includes('house') || desc.includes('house') || desc.includes('home')) {
+          listingCategory = 'house';
+        }
+        
+        if (listingCategory !== selectedCategory) return false;
+      }
+
+      // Price range filter
+      if (priceRange !== 'all') {
+        const price = h.pricePerNight || 0;
+        switch (priceRange) {
+          case 'low':
+            if (price >= 1000) return false;
+            break;
+          case 'medium':
+            if (price < 1000 || price > 3000) return false;
+            break;
+          case 'high':
+            if (price <= 3000) return false;
+            break;
+        }
+      }
+
+      return true;
+    });
+
+    // Apply sorting
+    switch (sortBy) {
+      case "price-low":
+        results.sort((a, b) => a.pricePerNight - b.pricePerNight);
+        break;
+      case "price-high":
+        results.sort((a, b) => b.pricePerNight - a.pricePerNight);
+        break;
+      case "rating":
+        results.sort((a, b) => b.rating - a.rating);
+        break;
+      case "guests":
+        results.sort((a, b) => b.guests - a.guests);
+        break;
+      default: // "featured" - default order
+        break;
+    }
+
+    return results;
+  }, [listings, filters, selectedCategory, priceRange, sortBy]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedListings = filtered.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters or sort changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, selectedCategory, priceRange, sortBy]);
+
+  const handleToggleFavorite = async (id) => {
+    if (!user?.uid) {
+      // If not logged in, show message or redirect to login
+      if (window.confirm('Please sign in to save favorites. Would you like to sign in?')) {
+        navigate('/login');
+      }
+      return;
+    }
+
+    try {
+      const result = await toggleFavorite(user.uid, id);
+      if (result.success) {
+        setFavorites(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+      } else {
+        console.error('Failed to toggle favorite:', result.error);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
+  };
+
+  const handleViewDetails = (stay) => {
+    navigate(`/listing/${stay.id}`);
+  };
+
+  const clearAllFilters = () => {
+    setFilters({ location: "", guests: 0, locationSelect: "" });
+    setSelectedCategory("all");
+    setPriceRange("all");
+    setSortBy("featured");
+  };
+
+  return (
+    <main id="homestays" className="min-h-screen bg-slate-100">
+      <Hero />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pt-6 sm:pt-8 md:pt-12">
+        {/* Header Section */}
+        <div className="text-center mb-8 sm:mb-12">
+          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-3 sm:mb-4">
+            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            <span className="text-xs sm:text-sm font-medium text-emerald-700">Premium Stays</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-emerald-900 mb-3 sm:mb-4 px-2">Discover Your Perfect Home Stay</h1>
+          <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl mx-auto px-4">
+            Curated hand-picked accommodations that feel like home. Filter by location, guest count and save your favorites.
+          </p>
+        </div>
+
+        <AnimatedSection className="mb-6 sm:mb-8">
+          <Filters
+            filters={filters}
+            setFilters={setFilters}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            priceRange={priceRange}
+            setPriceRange={setPriceRange}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            categories={categories.length > 0 ? categories : homeStayCategories}
+            categoryLabels={categoryLabels}
+            locations={locations}
+            priceRangeOptions={priceRangeOptions}
+            sortOptions={sortOptions}
+            filteredCount={filtered.length}
+            totalCount={listings.length}
+            searchPlaceholder="Search homestays..."
+            itemLabel="homestays"
+          />
+        </AnimatedSection>
+
+        {/* Home Stays Grid */}
+        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          {loading ? (
+            <div className="col-span-full text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading homestays...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl shadow-inner p-16 text-center border-2 border-dashed border-gray-300">
+              <div className="mb-6">
+                <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-full shadow-lg mb-4">
+                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                </div>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No homestays found</h3>
+              <p className="text-gray-600 max-w-md mx-auto mb-6">
+                {filters?.location || filters?.guests > 0 || filters?.locationSelect
+                  ? 'Try adjusting your filters to see more results.'
+                  : "We're adding amazing homestays for you. Check back soon for cozy stays!"}
+              </p>
+              {(filters?.location || filters?.guests > 0 || filters?.locationSelect) && (
+                <button
+                  onClick={clearAllFilters}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            paginatedListings.map((stay, index) => (
+              <AnimatedCard key={stay.id} delay={index * 0.1}>
+                <HomeStayCard
+                  stay={stay}
+                  onView={handleViewDetails}
+                  isFavorite={favorites.has(stay.id)}
+                  onToggleFavorite={() => handleToggleFavorite(stay.id)}
+                />
+              </AnimatedCard>
+            ))
+          )}
+        </AnimatedGrid>
+
+        {/* Pagination */}
+        {filtered.length > itemsPerPage && (
+          <div className="flex items-center justify-center gap-2 sm:gap-2 mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200 overflow-x-auto pb-2 sm:pb-0">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 sm:gap-2 text-sm sm:text-base touch-manipulation"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="hidden sm:inline">Previous</span>
+              <span className="sm:hidden">Prev</span>
+            </button>
+            
+            <div className="flex items-center gap-1 sm:gap-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                // Show first page, last page, current page, and pages around current
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors touch-manipulation ${
+                        currentPage === page
+                          ? 'bg-emerald-600 text-white'
+                          : 'border border-gray-300 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (page === currentPage - 2 || page === currentPage + 2) {
+                  return <span key={page} className="px-1 sm:px-2 text-gray-400 text-sm">...</span>;
+                }
+                return null;
+              })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 sm:gap-2 text-sm sm:text-base touch-manipulation"
+            >
+              <span className="hidden sm:inline">Next</span>
+              <span className="sm:hidden">Next</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Results info */}
+        {filtered.length > 0 && (
+          <div className="text-center mt-4 text-sm text-gray-600">
+            Showing {startIndex + 1} - {Math.min(endIndex, filtered.length)} of {filtered.length} home stays
+          </div>
+        )}
+      </div>
+    </main>
+  );
+};
+
+export default HomeStays;
