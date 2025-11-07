@@ -30,6 +30,9 @@ import HostEmailVerifyPage from "./pages/HostEmailVerifyPage";
 import UserSettings from "./pages/UserSettings";
 import UserFavorites from "./pages/UserFavorites";
 import UserMessages from "./pages/UserMessages";
+import UserBookings from "./pages/UserBookings";
+import UserWallet from "./pages/UserWallet";
+import UserPoints from "./pages/UserPoints";
 import Chat from "./pages/Chat";
 import Loading from "./components/Loading";
 
@@ -288,6 +291,36 @@ const AppContent = () => {
                   <RouteErrorBoundary>
                     <RequireGuestAuth>
                       <UserFavorites />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/bookings"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <UserBookings />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <UserWallet />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/points"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <UserPoints />
                     </RequireGuestAuth>
                   </RouteErrorBoundary>
                 }

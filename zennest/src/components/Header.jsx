@@ -224,8 +224,8 @@ const Header = () => {
           style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.2) inset" }}
         >
           <div className="max-w-7xl mx-auto flex justify-between items-center px-4 sm:px-6 md:px-12 py-3 sm:py-4">
-            {/* Logo */}
-            <div className="flex items-center relative cursor-pointer" onClick={() => handleNavigation("/")}>
+            {/* Desktop Logo */}
+            <div className="hidden md:flex items-center relative cursor-pointer" onClick={() => handleNavigation("/")}>
               <motion.img
                 src={ZennestLogo}
                 alt="Zennest Logo"
@@ -244,86 +244,35 @@ const Header = () => {
               />
             </div>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center space-x-6 lg:space-x-8">
-              <button
-                onClick={() => handleNavigation("/homestays")}
-                className="relative inline-block font-medium text-sm transition-transform duration-200 ease-out transform hover:-translate-y-0.5"
-              >
-                <span
-                  className={
-                    isActiveRoute("/homestays")
-                      ? "text-white"
-                      : "text-gray-200 hover:text-white"
-                  }
-                >
-                  Home Stays
-                </span>
-                <span
-                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
-                    isActiveRoute("/homestays")
-                      ? "w-full bg-white/90"
-                      : "w-0 bg-white group-hover:w-full"
-                  }`}
-                ></span>
-              </button>
+            {/* Mobile Layout: Empty Space - Logo (Centered) - Profile/Auth */}
+            <div className="md:hidden flex items-center justify-between w-full">
+              {/* Left spacer for balance */}
+              <div className="w-9"></div>
 
-              <button
-                onClick={() => handleNavigation("/experiences")}
-                className="relative inline-block font-medium text-sm transition-all duration-200 ease-out transform hover:-translate-y-0.5 group"
-              >
-                <span
-                  className={
-                    isActiveRoute("/experiences")
-                      ? "text-white"
-                      : "text-gray-200 hover:text-white"
-                  }
-                >
-                  Experiences
-                </span>
-                <span
-                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
-                    isActiveRoute("/experiences")
-                      ? "w-full bg-white/90"
-                      : "w-0 bg-white group-hover:w-full"
-                  }`}
-                ></span>
-              </button>
+              {/* Centered Logo */}
+              <div className="absolute left-1/2 transform -translate-x-1/2">
+                <div className="relative cursor-pointer" onClick={() => handleNavigation("/")}>
+                  <motion.img
+                    src={ZennestLogo}
+                    alt="Zennest Logo"
+                    className="h-8 w-auto absolute"
+                    initial={{ opacity: 1 }}
+                    animate={{ opacity: isScrolled ? 0 : 1 }}
+                    transition={{ duration: 0.1 }}
+                  />
+                  <motion.img
+                    src={ZennestLogoV2}
+                    alt="Zennest Logo"
+                    className="h-8 w-auto"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: isScrolled ? 1 : 0 }}
+                    transition={{ duration: 0.1 }}
+                  />
+                </div>
+              </div>
 
-              <button
-                onClick={() => handleNavigation("/services")}
-                className="relative inline-block font-medium text-sm transition-all duration-200 ease-out transform hover:-translate-y-0.5 group"
-              >
-                <span
-                  className={
-                    isActiveRoute("/services")
-                      ? "text-white"
-                      : "text-gray-200 hover:text-white"
-                  }
-                >
-                  Services
-                </span>
-                <span
-                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
-                    isActiveRoute("/services")
-                      ? "w-full bg-white/90"
-                      : "w-0 bg-white group-hover:w-full"
-                  }`}
-                ></span>
-              </button>
-            </nav>
-
-            {/* Mobile Menu Button and Profile */}
-            <div className="md:hidden flex items-center gap-2">
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="text-white p-2 rounded-lg border border-white/50 hover:bg-white/10 transition"
-                aria-label="Toggle mobile menu"
-              >
-                {mobileMenuOpen ? <FaTimes size={18} /> : <FaBars size={18} />}
-              </button>
-              
-              {user && (
+              {/* Right side: Profile or Auth buttons */}
+              {user ? (
                 <div className="relative" ref={mobileProfileRef}>
                   <motion.button
                     onClick={() => setMobileProfileOpen(!mobileProfileOpen)}
@@ -442,37 +391,29 @@ const Header = () => {
                                 onHover={() => setMobileHighlightedIndex(3)}
                               />
                               <MobileMenuItem
-                                icon={FaUser}
-                                label="Profile"
-                                onClick={() => handleNavigation("/profile")}
+                                icon={FaWallet}
+                                label="Wallet"
+                                onClick={() => handleNavigation("/wallet")}
                                 index={4}
                                 highlighted={mobileHighlightedIndex === 4}
                                 onHover={() => setMobileHighlightedIndex(4)}
                               />
                               <MobileMenuItem
-                                icon={FaWallet}
-                                label="Wallet"
-                                onClick={() => handleNavigation("/wallet")}
-                                index={5}
-                                highlighted={mobileHighlightedIndex === 5}
-                                onHover={() => setMobileHighlightedIndex(5)}
-                              />
-                              <MobileMenuItem
                                 icon={FaCog}
                                 label="Settings"
                                 onClick={() => handleNavigation("/settings")}
-                                index={6}
-                                highlighted={mobileHighlightedIndex === 6}
-                                onHover={() => setMobileHighlightedIndex(6)}
+                                index={5}
+                                highlighted={mobileHighlightedIndex === 5}
+                                onHover={() => setMobileHighlightedIndex(5)}
                               />
                               <div className="h-px bg-gray-200 my-1"></div>
                               <MobileMenuItem
                                 icon={FaSignOutAlt}
                                 label="Log out"
                                 onClick={handleLogoutClick}
-                                index={7}
-                                highlighted={mobileHighlightedIndex === 7}
-                                onHover={() => setMobileHighlightedIndex(7)}
+                                index={6}
+                                highlighted={mobileHighlightedIndex === 6}
+                                onHover={() => setMobileHighlightedIndex(6)}
                                 danger
                               />
                             </>
@@ -482,8 +423,96 @@ const Header = () => {
                     )}
                   </AnimatePresence>
                 </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    className="text-white text-xs font-medium py-1.5 px-3 rounded-lg border border-white/50 hover:bg-white/10 transition"
+                    onClick={() => navigate("/login")}
+                  >
+                    Log in
+                  </button>
+                  <button
+                    className={`text-xs font-medium py-1.5 px-3 rounded-lg transition ${
+                      isScrolled
+                        ? "bg-white text-emerald-700 hover:bg-gray-100"
+                        : "bg-emerald-700 text-white hover:bg-emerald-800"
+                    }`}
+                    onClick={() => navigate("/register")}
+                  >
+                    Register
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* Desktop Navigation Links */}
+            <nav className="hidden md:flex items-center space-x-6 lg:space-x-8">
+              <button
+                onClick={() => handleNavigation("/homestays")}
+                className="relative inline-block font-medium text-sm transition-transform duration-200 ease-out transform hover:-translate-y-0.5"
+              >
+                <span
+                  className={
+                    isActiveRoute("/homestays")
+                      ? "text-white"
+                      : "text-gray-200 hover:text-white"
+                  }
+                >
+                  Home Stays
+                </span>
+                <span
+                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
+                    isActiveRoute("/homestays")
+                      ? "w-full bg-white/90"
+                      : "w-0 bg-white group-hover:w-full"
+                  }`}
+                ></span>
+              </button>
+
+              <button
+                onClick={() => handleNavigation("/experiences")}
+                className="relative inline-block font-medium text-sm transition-all duration-200 ease-out transform hover:-translate-y-0.5 group"
+              >
+                <span
+                  className={
+                    isActiveRoute("/experiences")
+                      ? "text-white"
+                      : "text-gray-200 hover:text-white"
+                  }
+                >
+                  Experiences
+                </span>
+                <span
+                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
+                    isActiveRoute("/experiences")
+                      ? "w-full bg-white/90"
+                      : "w-0 bg-white group-hover:w-full"
+                  }`}
+                ></span>
+              </button>
+
+              <button
+                onClick={() => handleNavigation("/services")}
+                className="relative inline-block font-medium text-sm transition-all duration-200 ease-out transform hover:-translate-y-0.5 group"
+              >
+                <span
+                  className={
+                    isActiveRoute("/services")
+                      ? "text-white"
+                      : "text-gray-200 hover:text-white"
+                  }
+                >
+                  Services
+                </span>
+                <span
+                  className={`absolute left-0 -bottom-1 h-[2px] rounded-full transition-all duration-200 ${
+                    isActiveRoute("/services")
+                      ? "w-full bg-white/90"
+                      : "w-0 bg-white group-hover:w-full"
+                  }`}
+                ></span>
+              </button>
+            </nav>
 
             {/* Desktop Auth Section */}
             <div className="hidden md:block">
@@ -650,23 +679,13 @@ const Header = () => {
                                 color="amber"
                               />
                               <DesktopMenuItem
-                                icon={FaUser}
-                                label="Profile"
-                                description="Personal information"
-                                onClick={() => handleNavigation("/profile")}
-                                index={4}
-                                highlighted={highlightedIndex === 4}
-                                onHover={() => setHighlightedIndex(4)}
-                                color="indigo"
-                              />
-                              <DesktopMenuItem
                                 icon={FaWallet}
                                 label="Wallet"
                                 description="Top up & manage balance"
                                 onClick={() => handleNavigation("/wallet")}
-                                index={5}
-                                highlighted={highlightedIndex === 5}
-                                onHover={() => setHighlightedIndex(5)}
+                                index={4}
+                                highlighted={highlightedIndex === 4}
+                                onHover={() => setHighlightedIndex(4)}
                                 color="emerald"
                                 gradient
                               />
@@ -675,9 +694,9 @@ const Header = () => {
                                 label="Settings"
                                 description="Preferences & security"
                                 onClick={() => handleNavigation("/settings")}
-                                index={6}
-                                highlighted={highlightedIndex === 6}
-                                onHover={() => setHighlightedIndex(6)}
+                                index={5}
+                                highlighted={highlightedIndex === 5}
+                                onHover={() => setHighlightedIndex(5)}
                                 color="gray"
                               />
                             </>
@@ -692,9 +711,9 @@ const Header = () => {
                             label="Log out"
                             description="Sign out of your account"
                             onClick={handleLogoutClick}
-                            index={isHost ? 2 : 7}
-                            highlighted={highlightedIndex === (isHost ? 2 : 7)}
-                            onHover={() => setHighlightedIndex(isHost ? 2 : 7)}
+                            index={isHost ? 2 : 6}
+                            highlighted={highlightedIndex === (isHost ? 2 : 6)}
+                            onHover={() => setHighlightedIndex(isHost ? 2 : 6)}
                             danger
                           />
                         </div>
@@ -718,77 +737,6 @@ const Header = () => {
               )}
             </div>
           </div>
-
-          {/* Mobile Navigation Menu (only nav links) */}
-          {mobileMenuOpen && (
-            <div
-              ref={mobileMenuRef}
-              className={`md:hidden ${
-                isScrolled ? "bg-emerald-800/100" : "bg-white/20 backdrop-blur-md"
-              } border-t border-white/20`}
-            >
-              <div className="px-4 py-3 space-y-2">
-                <button
-                  onClick={() => handleNavigation("/homestays")}
-                  className={`w-full text-left font-medium text-sm py-2 px-3 rounded-lg transition-colors ${
-                    isActiveRoute("/homestays")
-                      ? "text-white bg-white/10"
-                      : "text-gray-200 hover:bg-white/5"
-                  }`}
-                >
-                  Home Stays
-                </button>
-                <button
-                  onClick={() => handleNavigation("/experiences")}
-                  className={`w-full text-left font-medium text-sm py-2 px-3 rounded-lg transition-colors ${
-                    isActiveRoute("/experiences")
-                      ? "text-white bg-white/10"
-                      : "text-gray-200 hover:bg-white/5"
-                  }`}
-                >
-                  Experiences
-                </button>
-                <button
-                  onClick={() => handleNavigation("/services")}
-                  className={`w-full text-left font-medium text-sm py-2 px-3 rounded-lg transition-colors ${
-                    isActiveRoute("/services")
-                      ? "text-white bg-white/10"
-                      : "text-gray-200 hover:bg-white/5"
-                  }`}
-                >
-                  Services
-                </button>
-
-                {/* Mobile Auth Buttons for non-logged in users */}
-                {!user && (
-                  <div className="space-y-2 pt-2 border-t border-white/20">
-                    <button
-                      className="w-full text-white text-sm font-medium py-2.5 rounded-lg border border-white/50 hover:bg-white/10 transition"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        navigate("/login");
-                      }}
-                    >
-                      Log in
-                    </button>
-                    <button
-                      className={`w-full text-sm font-medium py-2.5 rounded-lg transition ${
-                        isScrolled
-                          ? "bg-white text-emerald-700 hover:bg-gray-100"
-                          : "bg-emerald-700 text-white hover:bg-emerald-800"
-                      }`}
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        navigate("/register");
-                      }}
-                    >
-                      Register
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </header>
 

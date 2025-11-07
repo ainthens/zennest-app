@@ -1,8 +1,20 @@
 // src/pages/UserMessages.jsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { subscribeToUserConversations, deleteConversation } from '../services/firestoreService';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { 
+  subscribeToUserConversations, 
+  deleteConversation,
+  subscribeToMessages, 
+  sendConversationMessage, 
+  markConversationAsRead,
+  getHostProfile,
+  getGuestProfile,
+  setTypingStatus,
+  subscribeToTypingStatus
+} from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
 import {
@@ -12,23 +24,66 @@ import {
   FaArrowRight,
   FaSpinner,
   FaSearch,
-  FaCheck,
-  FaCheckDouble,
   FaTimes,
   FaCircle,
-  FaUser
+  FaUser,
+  FaPaperPlane,
+  FaArrowLeft,
+  FaEllipsisV
 } from 'react-icons/fa';
 
 const UserMessages = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredId, setHoveredId] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  
+  // Conversation panel states
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [otherUser, setOtherUser] = useState(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
+  const [showDeleteMenu, setShowDeleteMenu] = useState(false);
+  const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
+  // Get conversation ID from URL params
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (conversationId) {
+      setSelectedConversationId(conversationId);
+    }
+  }, [searchParams]);
+
+  // Fetch current user profile
+  useEffect(() => {
+    const fetchCurrentUserProfile = async () => {
+      if (user?.uid) {
+        try {
+          const result = await getGuestProfile(user.uid);
+          if (result.success && result.data) {
+            setCurrentUserProfile(result.data);
+          }
+        } catch (error) {
+          console.error('Error fetching current user profile:', error);
+        }
+      }
+    };
+    
+    fetchCurrentUserProfile();
+  }, [user]);
+
+  // Subscribe to conversations
   useEffect(() => {
     if (!user?.uid) {
       setLoading(false);
@@ -47,6 +102,210 @@ const UserMessages = () => {
     };
   }, [user]);
 
+  // Load selected conversation details
+  useEffect(() => {
+    if (!selectedConversationId || !user?.uid) {
+      setSelectedConversation(null);
+      setMessages([]);
+      setOtherUser(null);
+      return;
+    }
+
+    const loadConversation = async () => {
+      try {
+        setMessagesLoading(true);
+        const conversationRef = doc(db, 'conversations', selectedConversationId);
+        const conversationSnap = await getDoc(conversationRef);
+        
+        if (conversationSnap.exists()) {
+          const data = conversationSnap.data();
+          setSelectedConversation({ id: conversationSnap.id, ...data });
+          
+          // Fetch other user's profile
+          const otherUserId = user.uid === data.guestId ? data.hostId : data.guestId;
+          const otherUserType = user.uid === data.guestId ? 'host' : 'guest';
+          
+          if (otherUserType === 'host') {
+            const hostResult = await getHostProfile(otherUserId);
+            if (hostResult.success && hostResult.data) {
+              setOtherUser({
+                ...hostResult.data,
+                id: otherUserId,
+                type: 'host'
+              });
+            }
+          } else {
+            const guestResult = await getGuestProfile(otherUserId);
+            if (guestResult.success && guestResult.data) {
+              setOtherUser({
+                ...guestResult.data,
+                id: otherUserId,
+                type: 'guest'
+              });
+            }
+          }
+          
+          // Mark as read
+          await markConversationAsRead(selectedConversationId, user.uid);
+        }
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+      } finally {
+        setMessagesLoading(false);
+      }
+    };
+
+    loadConversation();
+  }, [selectedConversationId, user]);
+
+  // Subscribe to messages
+  useEffect(() => {
+    if (!selectedConversationId) return;
+
+    const unsubscribe = subscribeToMessages(selectedConversationId, (result) => {
+      if (result.success) {
+        setMessages(result.data || []);
+        scrollToBottom();
+      }
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [selectedConversationId]);
+
+  // Subscribe to typing status
+  useEffect(() => {
+    if (!selectedConversationId || !otherUser?.id) {
+      setIsOtherUserTyping(false);
+      return;
+    }
+
+    // Reset typing status when conversation changes
+    setIsOtherUserTyping(false);
+
+    const unsubscribe = subscribeToTypingStatus(
+      selectedConversationId,
+      user.uid, // Pass current user ID, not other user ID
+      (result) => {
+        // The callback returns an object with { success, isTyping, typingUsers }
+        if (result && result.success) {
+          setIsOtherUserTyping(result.isTyping === true);
+        } else {
+          setIsOtherUserTyping(false);
+        }
+      }
+    );
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      setIsOtherUserTyping(false);
+    };
+  }, [selectedConversationId, otherUser, user]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleTyping = () => {
+    if (!selectedConversationId || !user?.uid) return;
+
+    // Only set typing to true, let the timeout handle setting it to false
+    setTypingStatus(selectedConversationId, user.uid, true);
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set typing to false after 2 seconds of no typing
+    typingTimeoutRef.current = setTimeout(() => {
+      if (selectedConversationId && user?.uid) {
+        setTypingStatus(selectedConversationId, user.uid, false);
+      }
+    }, 2000);
+  };
+
+  // Cleanup typing status on unmount or conversation change
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (selectedConversationId && user?.uid) {
+        setTypingStatus(selectedConversationId, user.uid, false);
+      }
+    };
+  }, [selectedConversationId, user]);
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    
+    if (!newMessage.trim() || !selectedConversationId || sending) return;
+
+    setSending(true);
+    
+    // Clear typing timeout and status immediately when sending
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    setTypingStatus(selectedConversationId, user.uid, false);
+
+    try {
+      const result = await sendConversationMessage(
+        selectedConversationId,
+        user.uid,
+        user.displayName || user.email || 'User',
+        'guest',
+        newMessage.trim(),
+        selectedConversation?.listingId,
+        selectedConversation?.listingTitle
+      );
+
+      if (result.success) {
+        setNewMessage('');
+        scrollToBottom();
+      } else {
+        alert('Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSelectConversation = (conversationId) => {
+    setSelectedConversationId(conversationId);
+    setSearchParams({ conversation: conversationId });
+  };
+
+  const handleBackToInbox = () => {
+    setSelectedConversationId(null);
+    setSearchParams({});
+  };
+
+  const handleDeleteConversation = async (conversationId) => {
+    setDeletingId(conversationId);
+    try {
+      const result = await deleteConversation(conversationId);
+      if (result.success) {
+        setDeleteConfirmId(null);
+        if (selectedConversationId === conversationId) {
+          handleBackToInbox();
+        }
+      } else {
+        alert('Failed to delete conversation. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      alert('Failed to delete conversation. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // Filter conversations based on search query
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
@@ -58,24 +317,6 @@ const UserMessages = () => {
       (conv.listingId && conv.listingId.toLowerCase().includes(query))
     );
   }, [conversations, searchQuery]);
-
-  const handleDeleteConversation = async (conversationId) => {
-    setDeletingId(conversationId);
-    try {
-      const result = await deleteConversation(conversationId);
-      if (result.success) {
-        // Conversation will be removed via real-time listener
-        setDeleteConfirmId(null);
-      } else {
-        alert('Failed to delete conversation. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error deleting conversation:', error);
-      alert('Failed to delete conversation. Please try again.');
-    } finally {
-      setDeletingId(null);
-    }
-  };
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -93,14 +334,22 @@ const UserMessages = () => {
     return dateObj.toLocaleDateString();
   };
 
-  // Generate consistent color based on listingId
+  const formatMessageTime = (date) => {
+    if (!date) return '';
+    const dateObj = date instanceof Date ? date : (date?.toDate ? date.toDate() : new Date(date));
+    return dateObj.toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
   const getAvatarColor = (id) => {
     const colors = ['bg-blue-500', 'bg-purple-500', 'bg-pink-500', 'bg-emerald-500', 'bg-orange-500', 'bg-cyan-500'];
-    const index = id.charCodeAt(0) % colors.length;
+    const index = id?.charCodeAt(0) % colors.length || 0;
     return colors[index];
   };
 
-  // Get initials from title
   const getInitials = (title) => {
     if (!title) return '🏠';
     return title
@@ -156,12 +405,12 @@ const UserMessages = () => {
     <>
       <SettingsHeader />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header Section */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header - Hidden on mobile when conversation is selected */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8"
+            className={`mb-6 ${selectedConversationId ? 'hidden md:block' : ''}`}
           >
             <h1 className="text-4xl font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
               Messages
@@ -207,190 +456,125 @@ const UserMessages = () => {
               </motion.button>
             </motion.div>
           ) : (
-            <>
-              {/* Search Bar */}
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
-                <div className="relative">
-                  <FaSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Search by listing title, location, or message..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all outline-none text-gray-700"
-                    style={{ fontFamily: 'Poppins, sans-serif' }}
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <FaTimes className="w-5 h-5" />
-                    </button>
-                  )}
+            /* Split View Layout */
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 h-[calc(100vh-200px)]">
+              {/* Left Side - Inbox (Hidden on mobile when conversation selected) */}
+              <div className={`
+                md:col-span-4 lg:col-span-3 
+                ${selectedConversationId ? 'hidden md:block' : 'block'}
+                bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col
+              `}>
+                {/* Search Bar */}
+                <div className="p-4 border-b border-gray-200">
+                  <div className="relative">
+                    <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Search conversations..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all outline-none text-sm"
+                      style={{ fontFamily: 'Poppins, sans-serif' }}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <FaTimes className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </motion.div>
 
-              {/* Results Info */}
-              {searchQuery && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-sm text-gray-600 mb-4" style={{ fontFamily: 'Poppins, sans-serif' }}
-                >
-                  Found {filteredConversations.length} conversation{filteredConversations.length !== 1 ? 's' : ''}
-                </motion.p>
-              )}
+                {/* Conversations List */}
+                <div className="flex-1 overflow-y-auto">
+                  <AnimatePresence mode="popLayout">
+                    {filteredConversations.length > 0 ? (
+                      filteredConversations.map((conversation, index) => {
+                        const isUnread = conversation.unreadCount?.[user.uid] > 0;
+                        const unreadMessages = conversation.unreadCount?.[user.uid] || 0;
+                        const isSelected = selectedConversationId === conversation.id;
 
-              {/* Conversations List */}
-              <div className="space-y-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredConversations.length > 0 ? (
-                    filteredConversations.map((conversation, index) => {
-                      const isUnread = conversation.unreadCount?.[user.uid] > 0;
-                      const unreadMessages = conversation.unreadCount?.[user.uid] || 0;
-
-                      return (
-                        <motion.div
-                          key={conversation.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: -100 }}
-                          transition={{ duration: 0.3, delay: index * 0.05 }}
-                          onHoverStart={() => setHoveredId(conversation.id)}
-                          onHoverEnd={() => setHoveredId(null)}
-                          onClick={() => navigate(`/messages/${conversation.id}`)}
-                          className={`
-                            relative group cursor-pointer transition-all duration-300
-                            ${isUnread
-                              ? 'bg-gradient-to-r from-emerald-50 to-emerald-50/50 border-l-4 border-emerald-600 shadow-md'
-                              : 'bg-white border-l-4 border-transparent hover:shadow-lg'
-                            }
-                            rounded-2xl border-r border-t border-b border-gray-200 p-4 sm:p-5
-                            hover:bg-white hover:shadow-xl
-                          `}
-                        >
-                          <div className="flex items-start gap-4">
-                            {/* Avatar */}
-                            <div className={`
-                              flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl flex items-center justify-center
-                              text-white font-semibold text-lg relative
-                              ${getAvatarColor(conversation.listingId || conversation.id)}
-                              shadow-md
-                            `}>
-                              {getInitials(conversation.listingTitle)}
-                              {isUnread && (
-                                <motion.div
-                                  animate={{ scale: [1, 1.2, 1] }}
-                                  transition={{ duration: 2, repeat: Infinity }}
-                                  className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white shadow-md"
-                                />
-                              )}
-                            </div>
-
-                            {/* Content */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-3 mb-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <h3 className={`
-                                      font-semibold text-gray-900 truncate group-hover:text-emerald-600 transition-colors
-                                      ${isUnread ? 'text-lg' : 'text-base'}
-                                    `} style={{ fontFamily: 'Poppins, sans-serif' }}>
-                                      {conversation.listingTitle || 'Listing Conversation'}
-                                    </h3>
-                                    {isUnread && (
-                                      <motion.span
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        className="flex-shrink-0 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-semibold rounded-full px-2.5 py-0.5 shadow-md"
-                                        style={{ fontFamily: 'Poppins, sans-serif' }}
-                                      >
-                                        {unreadMessages} new
-                                      </motion.span>
-                                    )}
-                                  </div>
-                                </div>
-                                <span className={`
-                                  flex-shrink-0 text-sm font-medium whitespace-nowrap
-                                  ${isUnread ? 'text-emerald-600' : 'text-gray-500'}
-                                `} style={{ fontFamily: 'Poppins, sans-serif' }}>
-                                  {formatTime(conversation.lastMessageAt || conversation.createdAt)}
-                                </span>
-                              </div>
-
-                              {/* Location */}
-                              <div className="flex items-center gap-2 text-sm text-gray-600 mb-2.5">
-                                <FaMapMarkerAlt className="text-emerald-600 flex-shrink-0 w-3.5 h-3.5" />
-                                <span className="truncate text-xs" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                                  ID: {conversation.listingId?.slice(0, 12)}...
-                                </span>
-                              </div>
-
-                              {/* Last Message Preview */}
+                        return (
+                          <motion.div
+                            key={conversation.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.2, delay: index * 0.03 }}
+                            onClick={() => handleSelectConversation(conversation.id)}
+                            onMouseEnter={() => setHoveredId(conversation.id)}
+                            onMouseLeave={() => setHoveredId(null)}
+                            className={`
+                              relative cursor-pointer transition-all duration-200
+                              border-b border-gray-100 p-4 hover:bg-emerald-50
+                              ${isSelected ? 'bg-emerald-50 border-l-4 border-l-emerald-600' : 'border-l-4 border-l-transparent'}
+                              ${isUnread ? 'bg-blue-50/50' : 'bg-white'}
+                            `}
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Avatar */}
                               <div className={`
-                                p-3 rounded-lg bg-gray-50 border border-gray-200 group-hover:bg-emerald-50 group-hover:border-emerald-200 transition-all
-                                ${isUnread ? 'border-emerald-300 bg-emerald-50' : ''}
+                                relative flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center
+                                text-white font-semibold text-sm
+                                ${getAvatarColor(conversation.listingId || conversation.id)}
                               `}>
+                                {getInitials(conversation.listingTitle)}
+                                {isUnread && (
+                                  <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center">
+                                    <span className="text-white text-xs font-bold">{unreadMessages}</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Content */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <h3 className={`
+                                    font-semibold truncate text-sm
+                                    ${isUnread ? 'text-gray-900' : 'text-gray-700'}
+                                  `} style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                    {conversation.listingTitle || 'Conversation'}
+                                  </h3>
+                                  <span className="text-xs text-gray-500 flex-shrink-0" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                    {formatTime(conversation.lastMessageAt || conversation.createdAt)}
+                                  </span>
+                                </div>
                                 <p className={`
-                                  text-sm truncate leading-relaxed
-                                  ${isUnread ? 'text-gray-900 font-semibold' : 'text-gray-700'}
+                                  text-xs truncate
+                                  ${isUnread ? 'text-gray-700 font-medium' : 'text-gray-500'}
                                 `} style={{ fontFamily: 'Poppins, sans-serif' }}>
-                                  {truncateMessage(conversation.lastMessage, 70)}
+                                  {truncateMessage(conversation.lastMessage, 35)}
                                 </p>
                               </div>
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex-shrink-0 flex items-center gap-2">
-                              {/* Arrow Icon */}
-                              <motion.div
-                                animate={{ x: hoveredId === conversation.id ? 5 : 0 }}
-                                className="text-gray-400 group-hover:text-emerald-600 transition-colors"
-                              >
-                                <FaArrowRight className="w-5 h-5" />
-                              </motion.div>
-
-                              {/* Delete Button */}
+                            {/* Delete Button on Hover */}
+                            {hoveredId === conversation.id && !deleteConfirmId && (
                               <motion.button
                                 initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{
-                                  opacity: hoveredId === conversation.id ? 1 : 0,
-                                  scale: hoveredId === conversation.id ? 1 : 0.8
-                                }}
-                                transition={{ duration: 0.2 }}
+                                animate={{ opacity: 1, scale: 1 }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeleteConfirmId(conversation.id);
                                 }}
-                                disabled={deletingId === conversation.id}
-                                className="p-2.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                aria-label="Delete conversation"
+                                className="absolute top-2 right-2 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                               >
-                                {deletingId === conversation.id ? (
-                                  <FaSpinner className="w-5 h-5 animate-spin" />
-                                ) : (
-                                  <FaTrash className="w-5 h-5" />
-                                )}
+                                <FaTrash className="w-3 h-3" />
                               </motion.button>
-                            </div>
-                          </div>
+                            )}
 
-                          {/* Delete Confirmation */}
-                          <AnimatePresence>
+                            {/* Delete Confirmation */}
                             {deleteConfirmId === conversation.id && (
                               <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-3"
+                                className="absolute inset-0 bg-red-50 border-l-4 border-red-500 p-3 flex items-center justify-between z-10"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <p className="text-sm text-red-700 font-medium" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                                  Delete this conversation?
+                                <p className="text-xs text-red-700 font-medium" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                  Delete?
                                 </p>
                                 <div className="flex gap-2">
                                   <button
@@ -398,8 +582,7 @@ const UserMessages = () => {
                                       e.stopPropagation();
                                       setDeleteConfirmId(null);
                                     }}
-                                    className="px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                                    style={{ fontFamily: 'Poppins, sans-serif' }}
+                                    className="px-2 py-1 text-xs text-gray-700 hover:bg-gray-200 rounded"
                                   >
                                     Cancel
                                   </button>
@@ -408,40 +591,268 @@ const UserMessages = () => {
                                       e.stopPropagation();
                                       handleDeleteConversation(conversation.id);
                                     }}
-                                    className="px-3 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                                    style={{ fontFamily: 'Poppins, sans-serif' }}
+                                    disabled={deletingId === conversation.id}
+                                    className="px-2 py-1 text-xs text-white bg-red-600 hover:bg-red-700 rounded"
                                   >
-                                    Delete
+                                    {deletingId === conversation.id ? 'Deleting...' : 'Delete'}
                                   </button>
                                 </div>
                               </motion.div>
                             )}
-                          </AnimatePresence>
-                        </motion.div>
-                      );
-                    })
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center py-12"
-                    >
-                      <FaSearch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-600 text-lg" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        No conversations match "{searchQuery}"
-                      </p>
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="mt-4 text-emerald-600 hover:text-emerald-700 font-medium text-sm"
-                        style={{ fontFamily: 'Poppins, sans-serif' }}
-                      >
-                        Clear search
-                      </button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                          </motion.div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-12 px-4">
+                        <FaSearch className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-600 text-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                          No conversations found
+                        </p>
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
-            </>
+
+              {/* Right Side - Conversation Panel */}
+              <div className={`
+                md:col-span-8 lg:col-span-9
+                ${selectedConversationId ? 'block' : 'hidden md:flex'}
+                bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col
+              `}>
+                {selectedConversationId && selectedConversation ? (
+                  <>
+                    {/* Conversation Header */}
+                    <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white p-4 flex items-center justify-between border-b border-emerald-800">
+                      <div className="flex items-center gap-3">
+                        {/* Back Button (Mobile Only) */}
+                        <button
+                          onClick={handleBackToInbox}
+                          className="md:hidden p-2 hover:bg-emerald-700 rounded-lg transition-colors"
+                        >
+                          <FaArrowLeft className="w-5 h-5" />
+                        </button>
+
+                        {/* User Info */}
+                        <div className={`
+                          w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold
+                          ${otherUser?.profilePicture ? '' : 'bg-emerald-800'}
+                        `}>
+                          {otherUser?.profilePicture ? (
+                            <img 
+                              src={otherUser.profilePicture} 
+                              alt={otherUser.displayName || 'User'}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            <FaUser className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div>
+                          <h2 className="font-semibold text-lg" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                            {selectedConversation.listingTitle || 'Conversation'}
+                          </h2>
+                          <p className="text-xs text-emerald-100" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                            {otherUser?.displayName || 'Host'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Menu Button */}
+                      <button
+                        onClick={() => setShowDeleteMenu(!showDeleteMenu)}
+                        className="p-2 hover:bg-emerald-700 rounded-lg transition-colors relative"
+                      >
+                        <FaEllipsisV className="w-4 h-4" />
+                        {showDeleteMenu && (
+                          <div className="absolute right-0 top-12 bg-white text-gray-700 rounded-lg shadow-xl border border-gray-200 py-1 w-48 z-20">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDeleteMenu(false);
+                                handleDeleteConversation(selectedConversationId);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-red-50 hover:text-red-600 flex items-center gap-2"
+                            >
+                              <FaTrash className="w-3 h-3" />
+                              Delete Conversation
+                            </button>
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Messages Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+                      {messagesLoading ? (
+                        <div className="flex items-center justify-center h-full">
+                          <FaSpinner className="w-8 h-8 text-emerald-600 animate-spin" />
+                        </div>
+                      ) : messages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-center">
+                          <FaEnvelope className="w-16 h-16 text-gray-300 mb-4" />
+                          <p className="text-gray-500" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                            No messages yet. Start the conversation!
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {messages.map((message, index) => {
+                            const isOwnMessage = message.senderId === user.uid;
+                            const showAvatar = index === 0 || messages[index - 1].senderId !== message.senderId;
+
+                            return (
+                              <motion.div
+                                key={message.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className={`flex items-end gap-2 ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}
+                              >
+                                {/* Avatar */}
+                                <div className="w-8 h-8 flex-shrink-0">
+                                  {showAvatar && (
+                                    <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center">
+                                      {isOwnMessage ? (
+                                        currentUserProfile?.profilePicture || user.photoURL ? (
+                                          <img 
+                                            src={currentUserProfile?.profilePicture || user.photoURL} 
+                                            alt="Your profile"
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full bg-emerald-600 flex items-center justify-center">
+                                            <span className="text-xs font-semibold text-white">
+                                              {user.displayName?.[0] || user.email?.[0] || 'Y'}
+                                            </span>
+                                          </div>
+                                        )
+                                      ) : (
+                                        otherUser?.profilePicture ? (
+                                          <img 
+                                            src={otherUser.profilePicture} 
+                                            alt="Host profile"
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full bg-gray-400 flex items-center justify-center">
+                                            <FaUser className="w-4 h-4 text-white" />
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-col gap-0.5 max-w-[70%]">
+                                  {/* Message Bubble */}
+                                  <div className={`
+                                    px-4 py-2 rounded-2xl
+                                    ${isOwnMessage 
+                                      ? 'bg-emerald-600 text-white rounded-br-none' 
+                                      : 'bg-white text-gray-800 rounded-bl-none shadow-sm border border-gray-200'
+                                    }
+                                  `}>
+                                    <p className="text-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                      {message.text || message.content}
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Timestamp below message */}
+                                  {showAvatar && (
+                                    <p className={`
+                                      text-xs text-gray-500 px-2
+                                      ${isOwnMessage ? 'text-right' : 'text-left'}
+                                    `} style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                      {formatMessageTime(message.createdAt)}
+                                    </p>
+                                  )}
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                          <div ref={messagesEndRef} />
+
+                          {/* Typing Indicator */}
+                          {isOtherUserTyping && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="flex items-center gap-2"
+                            >
+                              <div className="w-8 h-8" />
+                              <div className="bg-gray-200 rounded-2xl rounded-bl-none px-4 py-3">
+                                <div className="flex gap-1">
+                                  <motion.div
+                                    animate={{ y: [0, -5, 0] }}
+                                    transition={{ duration: 0.6, repeat: Infinity }}
+                                    className="w-2 h-2 bg-gray-500 rounded-full"
+                                  />
+                                  <motion.div
+                                    animate={{ y: [0, -5, 0] }}
+                                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
+                                    className="w-2 h-2 bg-gray-500 rounded-full"
+                                  />
+                                  <motion.div
+                                    animate={{ y: [0, -5, 0] }}
+                                    transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}
+                                    className="w-2 h-2 bg-gray-500 rounded-full"
+                                  />
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Message Input */}
+                    <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-gray-200">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          value={newMessage}
+                          onChange={(e) => {
+                            setNewMessage(e.target.value);
+                            handleTyping();
+                          }}
+                          placeholder="Type your message..."
+                          className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all outline-none"
+                          style={{ fontFamily: 'Poppins, sans-serif' }}
+                          disabled={sending}
+                        />
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          type="submit"
+                          disabled={!newMessage.trim() || sending}
+                          className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {sending ? (
+                            <FaSpinner className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <FaPaperPlane className="w-5 h-5" />
+                          )}
+                        </motion.button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  /* No Conversation Selected */
+                  <div className="hidden md:flex flex-col items-center justify-center h-full text-center p-8">
+                    <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+                      <FaEnvelope className="w-12 h-12 text-emerald-600" />
+                    </div>
+                    <h2 className="text-2xl font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                      Select a Conversation
+                    </h2>
+                    <p className="text-gray-600 max-w-md" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                      Choose a conversation from the list to start messaging with hosts
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

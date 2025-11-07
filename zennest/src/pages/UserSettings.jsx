@@ -636,7 +636,7 @@ const UserSettings = () => {
                   >
                     <div className="px-6 sm:px-8 py-6 space-y-6">
                       <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                        <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
                           <FaCamera className="w-5 h-5 text-emerald-600" />
                           Profile Picture
                         </h2>
@@ -664,7 +664,7 @@ const UserSettings = () => {
                               className="w-32 h-32 rounded-2xl object-cover border-4 border-emerald-200 shadow-lg"
                             />
                           ) : (
-                            <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-4xl font-bold border-4 border-emerald-200 shadow-lg">
+                            <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-4xl font-semibold border-4 border-emerald-200 shadow-lg">
                               {formData.firstName && formData.lastName ? (
                                 `${formData.firstName.charAt(0)}${formData.lastName.charAt(0)}`
                               ) : (
@@ -681,7 +681,7 @@ const UserSettings = () => {
 
                         {/* Upload Info */}
                         <div className="flex-1">
-                          <h3 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
                             {formData.profilePicture ? 'Update Your Photo' : 'Add a Profile Photo'}
                           </h3>
                           <p className="text-sm text-gray-600 mb-4" style={{ fontFamily: 'Poppins, sans-serif' }}>
@@ -738,7 +738,7 @@ const UserSettings = () => {
                               exit={{ scale: 0.95, opacity: 0 }}
                               className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-4"
                             >
-                              <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                              <h3 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
                                 Crop Your Photo
                               </h3>
                               <ReactCrop
@@ -1073,7 +1073,7 @@ const UserSettings = () => {
                           onClick={handleChangePassword}
                           disabled={changingPassword}
                           className={`
-                            w-full px-6 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2
+                            w-full px-6 py-3 rounded-xl transition-all font-semibold flex items-center justify-center gap-2
                             ${changingPassword
                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                               : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg'
@@ -1105,7 +1105,7 @@ const UserSettings = () => {
                     />
 
                     <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
                         <FaCreditCard className="w-4 h-4 text-emerald-600" />
                         Payment Methods
                       </h4>
@@ -1120,7 +1120,7 @@ const UserSettings = () => {
                     </div>
 
                     <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
                         <FaTrash className="w-4 h-4 text-red-600" />
                         Danger Zone
                       </h4>
@@ -1148,7 +1148,7 @@ const UserSettings = () => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleCancel}
-                    className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-xl transition-colors font-bold"
+                    className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-xl transition-colors font-semibold"
                     style={{ fontFamily: 'Poppins, sans-serif' }}
                   >
                     Cancel
@@ -1159,7 +1159,7 @@ const UserSettings = () => {
                     onClick={handleSave}
                     disabled={saving || !hasChanges}
                     className={`
-                      flex-1 px-6 py-3 rounded-xl transition-all font-bold flex items-center justify-center gap-2
+                      flex-1 px-6 py-3 rounded-xl transition-all font-semibold flex items-center justify-center gap-2
                       ${saving || !hasChanges
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-lg'
@@ -1254,7 +1254,7 @@ const FormField = ({
 const ToggleField = ({ label, description, value, onChange, disabled }) => (
   <div className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
     <div>
-      <h4 className="text-sm font-bold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+      <h4 className="text-sm font-semibold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
         {label}
       </h4>
       <p className="text-xs text-gray-600 mt-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
@@ -1291,7 +1291,7 @@ const CollapsibleSection = ({ title, icon: Icon, isOpen, onToggle, children }) =
       onClick={onToggle}
       className="w-full px-6 sm:px-8 py-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
     >
-      <h2 className="text-lg font-bold text-gray-900 flex items-center gap-3" style={{ fontFamily: 'Poppins, sans-serif' }}>
+      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-3" style={{ fontFamily: 'Poppins, sans-serif' }}>
         <Icon className="w-5 h-5 text-emerald-600" />
         {title}
       </h2>
