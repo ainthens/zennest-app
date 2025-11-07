@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { getHostProfile, getUserFavorites, toggleFavorite, getOrCreateConversation } from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
@@ -77,13 +77,25 @@ const ListingDetails = () => {
   const [hoverDate, setHoverDate] = useState(null);
   const [calendarMode, setCalendarMode] = useState('checkIn'); // 'checkIn' or 'checkOut'
 
-  // Mock unavailable dates (in production, fetch from database)
-  const [unavailableDates] = useState([
-    new Date(2024, 10, 15), // Nov 15
-    new Date(2024, 10, 16), // Nov 16
-    new Date(2024, 10, 20), // Nov 20
-    new Date(2024, 11, 25), // Dec 25
-  ]);
+  // Unavailable dates from listing data and existing bookings
+  const [unavailableDates, setUnavailableDates] = useState([]);
+  const [bookedDates, setBookedDates] = useState([]); // Dates from existing bookings
+  const [reviews, setReviews] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    cleanliness: 5,
+    accuracy: 5,
+    communication: 5,
+    location: 5,
+    checkin: 5,
+    value: 5,
+    comment: ''
+  });
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -102,8 +114,67 @@ const ListingDetails = () => {
           };
           setListing(listingData);
 
+          // Process reviews
+          if (data.reviews && Array.isArray(data.reviews) && data.reviews.length > 0) {
+            const processedReviews = data.reviews.map(review => ({
+              ...review,
+              createdAt: review.createdAt?.toDate 
+                ? review.createdAt.toDate() 
+                : review.createdAt instanceof Date
+                  ? review.createdAt
+                  : review.createdAt
+                    ? new Date(review.createdAt)
+                    : new Date()
+            })).sort((a, b) => {
+              const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
+              const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
+              return dateB - dateA; // Most recent first
+            });
+            setReviews(processedReviews);
+            
+            // Check if user has reviewed after reviews are loaded
+            if (user?.uid) {
+              const userHasReviewed = processedReviews.some(review => 
+                (review.guestId === user.uid || review.userId === user.uid)
+              );
+              setHasReviewed(userHasReviewed);
+              // Update canReview if we already checked bookings
+              if (canReview) {
+                setCanReview(!userHasReviewed);
+              }
+            }
+          } else {
+            setReviews([]);
+          }
+
+          // Convert unavailableDates from Firestore Timestamps to Date objects
+          let unavailableDatesArray = [];
+          if (data.unavailableDates && Array.isArray(data.unavailableDates)) {
+            unavailableDatesArray = data.unavailableDates.map(date => {
+              if (date?.toDate) {
+                return date.toDate();
+              } else if (date instanceof Date) {
+                return date;
+              } else if (typeof date === 'string') {
+                return new Date(date);
+              }
+              return null;
+            }).filter(Boolean);
+          }
+          console.log('📅 Loaded unavailable dates:', unavailableDatesArray);
+          setUnavailableDates(unavailableDatesArray);
+
           if (listingData.hostId) {
             fetchHostProfile(listingData.hostId);
+          }
+          
+          // Fetch existing bookings for this listing
+          if (listingData.id) {
+            fetchBookedDates(listingData.id);
+            // Check if user can review this listing
+            if (user?.uid) {
+              checkCanReview(listingData.id, user.uid);
+            }
           }
         } else {
           setError('Listing not found');
@@ -162,6 +233,123 @@ const ListingDetails = () => {
       console.error('Error fetching host profile:', error);
     } finally {
       setLoadingHost(false);
+    }
+  };
+
+  // Check if user can review this listing (has completed booking)
+  const checkCanReview = async (listingId, userId) => {
+    try {
+      const bookingsRef = collection(db, 'bookings');
+      const q = query(
+        bookingsRef,
+        where('listingId', '==', listingId),
+        where('guestId', '==', userId)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      let hasCompletedBooking = false;
+      const userReviewIds = [];
+      
+      querySnapshot.forEach((doc) => {
+        const booking = doc.data();
+        
+        // Check if booking is completed (past checkout date or status is completed/confirmed)
+        if (booking.status === 'cancelled') return;
+        
+        if (booking.checkIn && booking.checkOut) {
+          const checkOut = booking.checkOut?.toDate 
+            ? booking.checkOut.toDate() 
+            : new Date(booking.checkOut);
+          const now = new Date();
+          
+          // Booking is completed if checkout date has passed
+          if (now > checkOut) {
+            hasCompletedBooking = true;
+          }
+        } else {
+          // For services/experiences without dates, check status
+          if (booking.status === 'confirmed' || booking.status === 'completed') {
+            hasCompletedBooking = true;
+          }
+        }
+      });
+      
+      // Check if user has already reviewed (check in listing data)
+      const listingRef = doc(db, 'listings', listingId);
+      const listingSnap = await getDoc(listingRef);
+      
+      if (listingSnap.exists()) {
+        const listingData = listingSnap.data();
+        const listingReviews = Array.isArray(listingData.reviews) ? listingData.reviews : [];
+        const userHasReviewed = listingReviews.some(review => 
+          (review.guestId === userId || review.userId === userId)
+        );
+        setHasReviewed(userHasReviewed);
+        setCanReview(hasCompletedBooking && !userHasReviewed);
+      } else {
+        setCanReview(hasCompletedBooking);
+      }
+    } catch (error) {
+      console.error('Error checking if user can review:', error);
+      setCanReview(false);
+    }
+  };
+
+  // Fetch existing bookings to mark dates as unavailable
+  const fetchBookedDates = async (listingId) => {
+    try {
+      const bookingsRef = collection(db, 'bookings');
+      
+      // Try with status filter first
+      let querySnapshot;
+      try {
+        const q = query(
+          bookingsRef,
+          where('listingId', '==', listingId),
+          where('status', 'in', ['pending', 'confirmed', 'reserved'])
+        );
+        querySnapshot = await getDocs(q);
+      } catch (error) {
+        // If query fails (e.g., missing index), try without status filter
+        console.warn('⚠️ Status filter query failed, fetching all bookings:', error);
+        const q = query(
+          bookingsRef,
+          where('listingId', '==', listingId)
+        );
+        querySnapshot = await getDocs(q);
+      }
+      
+      const bookedDatesArray = [];
+      
+      querySnapshot.forEach((doc) => {
+        const booking = doc.data();
+        // Only include confirmed, pending, or reserved bookings
+        if (booking.status && ['pending', 'confirmed', 'reserved'].includes(booking.status)) {
+          if (booking.checkIn && booking.checkOut) {
+            // Convert Firestore Timestamps to Date objects
+            const checkIn = booking.checkIn?.toDate ? booking.checkIn.toDate() : new Date(booking.checkIn);
+            const checkOut = booking.checkOut?.toDate ? booking.checkOut.toDate() : new Date(booking.checkOut);
+            
+            // Add all dates between checkIn and checkOut (inclusive)
+            const currentDate = new Date(checkIn);
+            currentDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(checkOut);
+            endDate.setHours(0, 0, 0, 0);
+            
+            while (currentDate <= endDate) {
+              bookedDatesArray.push(new Date(currentDate));
+              currentDate.setDate(currentDate.getDate() + 1);
+            }
+          }
+        }
+      });
+      
+      console.log('📅 Loaded booked dates:', bookedDatesArray);
+      setBookedDates(bookedDatesArray);
+    } catch (error) {
+      console.error('Error fetching booked dates:', error);
+      // If query fails completely, continue without blocking
+      setBookedDates([]);
     }
   };
 
@@ -331,9 +519,75 @@ const ListingDetails = () => {
   };
 
   const isDateUnavailable = (date) => {
-    return unavailableDates.some(unavailableDate => 
-      unavailableDate.toDateString() === date.toDateString()
-    );
+    // Check host-marked unavailable dates
+    if (unavailableDates && unavailableDates.length > 0) {
+      const normalizeDate = (d) => {
+        const normalized = new Date(d);
+        normalized.setHours(0, 0, 0, 0);
+        return normalized;
+      };
+      
+      const normalizedDate = normalizeDate(date);
+      
+      const isHostUnavailable = unavailableDates.some(unavailableDate => {
+        const normalizedUnavailable = normalizeDate(unavailableDate);
+        return normalizedUnavailable.getTime() === normalizedDate.getTime();
+      });
+      
+      if (isHostUnavailable) return true;
+    }
+    
+    // Check booked dates
+    if (bookedDates && bookedDates.length > 0) {
+      const normalizeDate = (d) => {
+        const normalized = new Date(d);
+        normalized.setHours(0, 0, 0, 0);
+        return normalized;
+      };
+      
+      const normalizedDate = normalizeDate(date);
+      
+      return bookedDates.some(bookedDate => {
+        const normalizedBooked = normalizeDate(bookedDate);
+        return normalizedBooked.getTime() === normalizedDate.getTime();
+      });
+    }
+    
+    return false;
+  };
+  
+  // Check if any date in a range is unavailable
+  const hasUnavailableDatesInRange = (startDate, endDate) => {
+    if (!startDate || !endDate) {
+      console.log('📅 Missing start or end date');
+      return false;
+    }
+    
+    // Convert string dates to Date objects if needed
+    const start = startDate instanceof Date ? new Date(startDate) : new Date(startDate);
+    const end = endDate instanceof Date ? new Date(endDate) : new Date(endDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    
+    console.log('📅 Checking range:', {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+      unavailableDates: unavailableDates.map(d => d.toISOString().split('T')[0]),
+      bookedDates: bookedDates.map(d => d.toISOString().split('T')[0])
+    });
+    
+    // Check each day in the range
+    const currentDate = new Date(start);
+    while (currentDate <= end) {
+      if (isDateUnavailable(new Date(currentDate))) {
+        console.log('❌ Found unavailable date in range:', currentDate.toISOString().split('T')[0]);
+        return true;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    console.log('✅ No unavailable dates in range');
+    return false;
   };
 
   const isDateInPast = (date) => {
@@ -369,11 +623,7 @@ const ListingDetails = () => {
         setCheckOut('');
       } else {
         // Check if any unavailable dates are in the range
-        const hasUnavailableInRange = unavailableDates.some(unavailableDate => 
-          unavailableDate > selectedDates.start && unavailableDate < date
-        );
-        
-        if (hasUnavailableInRange) {
+        if (hasUnavailableDatesInRange(selectedDates.start, date)) {
           alert('Selected range contains unavailable dates. Please select a different range.');
           return;
         }
@@ -401,6 +651,168 @@ const ListingDetails = () => {
     if (!dateString) return 'Add date';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatReviewDate = (date) => {
+    if (!date) return '';
+    const dateObj = date instanceof Date ? date : new Date(date);
+    if (isNaN(dateObj.getTime())) return '';
+    return dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  };
+
+  const getInitials = (name) => {
+    if (!name) return 'G';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    return name.charAt(0).toUpperCase();
+  };
+
+  const calculateCategoryRatings = () => {
+    if (!reviews || reviews.length === 0) return {};
+    
+    const categories = ['cleanliness', 'accuracy', 'communication', 'location', 'checkin', 'value'];
+    const categoryRatings = {};
+    
+    categories.forEach(category => {
+      const ratings = reviews
+        .filter(review => review[category] && review[category] > 0)
+        .map(review => review[category]);
+      
+      if (ratings.length > 0) {
+        categoryRatings[category] = ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length;
+      } else {
+        categoryRatings[category] = 0;
+      }
+    });
+    
+    return categoryRatings;
+  };
+
+  const getCategoryLabel = (category) => {
+    const labels = {
+      cleanliness: 'Cleanliness',
+      accuracy: 'Accuracy',
+      communication: 'Communication',
+      location: 'Location',
+      checkin: 'Check-in',
+      value: 'Value'
+    };
+    return labels[category] || category;
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!user?.uid) {
+      alert('Please sign in to submit a review');
+      return;
+    }
+    
+    if (!reviewForm.comment.trim()) {
+      alert('Please write a review comment');
+      return;
+    }
+    
+    try {
+      setSubmittingReview(true);
+      
+      // Get user's name
+      const userName = user.displayName || user.email?.split('@')[0] || 'Guest';
+      
+      // Create review object
+      const newReview = {
+        guestId: user.uid,
+        userId: user.uid,
+        reviewerName: userName,
+        guestName: userName,
+        rating: reviewForm.rating,
+        overallRating: reviewForm.rating,
+        cleanliness: reviewForm.cleanliness,
+        accuracy: reviewForm.accuracy,
+        communication: reviewForm.communication,
+        location: reviewForm.location,
+        checkin: reviewForm.checkin,
+        value: reviewForm.value,
+        comment: reviewForm.comment.trim(),
+        text: reviewForm.comment.trim(),
+        review: reviewForm.comment.trim(),
+        createdAt: Timestamp.now()
+      };
+      
+      // Get current listing data
+      const listingRef = doc(db, 'listings', listing.id);
+      const listingSnap = await getDoc(listingRef);
+      
+      if (!listingSnap.exists()) {
+        throw new Error('Listing not found');
+      }
+      
+      const currentData = listingSnap.data();
+      const currentReviews = Array.isArray(currentData.reviews) ? currentData.reviews : [];
+      
+      // Check if user already reviewed
+      const alreadyReviewed = currentReviews.some(r => 
+        (r.guestId === user.uid || r.userId === user.uid)
+      );
+      
+      if (alreadyReviewed) {
+        alert('You have already reviewed this listing');
+        setHasReviewed(true);
+        setCanReview(false);
+        setSubmittingReview(false);
+        return;
+      }
+      
+      // Add new review
+      const updatedReviews = [...currentReviews, newReview];
+      
+      // Calculate new average rating
+      const totalRating = updatedReviews.reduce((sum, r) => sum + (r.rating || r.overallRating || 0), 0);
+      const averageRating = updatedReviews.length > 0 ? totalRating / updatedReviews.length : 0;
+      
+      // Update listing with new review and rating
+      await updateDoc(listingRef, {
+        reviews: updatedReviews,
+        rating: parseFloat(averageRating.toFixed(1)),
+        updatedAt: serverTimestamp()
+      });
+      
+      // Update local state
+      const processedNewReview = {
+        ...newReview,
+        createdAt: new Date()
+      };
+      setReviews([processedNewReview, ...reviews]);
+      setListing(prev => ({
+        ...prev,
+        rating: parseFloat(averageRating.toFixed(1)),
+        reviews: updatedReviews
+      }));
+      
+      // Reset form and close
+      setReviewForm({
+        rating: 5,
+        cleanliness: 5,
+        accuracy: 5,
+        communication: 5,
+        location: 5,
+        checkin: 5,
+        value: 5,
+        comment: ''
+      });
+      setShowReviewForm(false);
+      setCanReview(false);
+      setHasReviewed(true);
+      
+      alert('Thank you for your review!');
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      alert('Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const clearDates = () => {
@@ -431,97 +843,112 @@ const ListingDetails = () => {
       const inRange = isDateInRange(date);
       const inHoverRange = isDateInHoverRange(date);
       const isDisabled = isUnavailable || isPast;
+      
+      // Determine rounded corners for range styling (Airbnb style)
+      const prevDay = new Date(date);
+      prevDay.setDate(prevDay.getDate() - 1);
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      const isRangeStart = isStart || (inRange && !isDateInRange(prevDay));
+      const isRangeEnd = isEnd || (inRange && !isDateInRange(nextDay));
 
       days.push(
         <button
           key={day}
           onClick={() => handleDateClick(date)}
-          onMouseEnter={() => setHoverDate(date)}
+          onMouseEnter={() => !isDisabled && setHoverDate(date)}
           onMouseLeave={() => setHoverDate(null)}
           disabled={isDisabled}
           className={`
-            aspect-square p-2 text-sm font-medium rounded-lg transition-all relative
+            relative aspect-square flex items-center justify-center text-sm font-medium
+            transition-all duration-150 ease-in-out
             ${isDisabled 
-              ? 'text-gray-300 cursor-not-allowed line-through bg-gray-50' 
-              : 'hover:bg-emerald-100 cursor-pointer'
+              ? 'text-gray-300 cursor-not-allowed' 
+              : 'text-gray-700 hover:bg-gray-100 cursor-pointer'
             }
-            ${isStart || isEnd 
-              ? 'bg-emerald-600 text-white hover:bg-emerald-700 z-10' 
+            ${isStart || isEnd
+              ? 'bg-black text-white hover:bg-black font-semibold rounded-full z-10'
               : ''
             }
-            ${inRange && !isStart && !isEnd 
-              ? 'bg-emerald-100 text-emerald-900' 
+            ${inRange && !isStart && !isEnd
+              ? 'bg-gray-200 text-gray-900'
               : ''
             }
-            ${inHoverRange && !isStart && !isEnd && !isDisabled
-              ? 'bg-emerald-50 text-emerald-700' 
+            ${inHoverRange && !isStart && !isEnd && !isDisabled && selectedDates.start && !selectedDates.end
+              ? 'bg-gray-100 text-gray-900'
               : ''
             }
-            ${!isDisabled && !isStart && !isEnd && !inRange && !inHoverRange
-              ? 'text-gray-700'
+            ${isRangeStart && inRange && !isStart
+              ? 'rounded-l-full'
+              : ''
+            }
+            ${isRangeEnd && inRange && !isEnd
+              ? 'rounded-r-full'
               : ''
             }
           `}
+          title={isDisabled ? (isPast ? 'Past date' : 'Unavailable') : ''}
         >
           {day}
           {isUnavailable && !isPast && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-1 h-1 bg-red-500 rounded-full" />
-            </div>
+            <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-red-500 rounded-full" />
           )}
         </button>
       );
     }
 
     return (
-      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-xl p-6">
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6 max-w-md mx-auto">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-6">
           <button
+            type="button"
             onClick={prevMonth}
             disabled={currentMonth <= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <FaChevronLeft className="w-5 h-5 text-gray-700" />
+            <FaChevronLeft className="w-4 h-4 text-gray-700" />
           </button>
-          <h3 className="text-lg font-bold text-gray-900">
+          <h3 className="text-base font-semibold text-gray-900">
             {monthNames[month]} {year}
           </h3>
           <button
+            type="button"
             onClick={nextMonth}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
-            <FaChevronRight className="w-5 h-5 text-gray-700" />
+            <FaChevronRight className="w-4 h-4 text-gray-700" />
           </button>
         </div>
 
         {/* Day labels */}
-        <div className="grid grid-cols-7 gap-2 mb-3">
+        <div className="grid grid-cols-7 gap-1 mb-2">
           {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-            <div key={day} className="text-center text-xs font-bold text-gray-500 uppercase">
+            <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
               {day}
             </div>
           ))}
         </div>
 
         {/* Calendar days */}
-        <div className="grid grid-cols-7 gap-2 mb-4">
+        <div className="grid grid-cols-7 gap-1">
           {days}
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-4 pt-4 border-t border-gray-200 text-xs">
+        <div className="flex flex-wrap gap-4 pt-4 mt-4 border-t border-gray-200 text-xs">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-600" />
+            <div className="w-3 h-3 rounded-full bg-black" />
             <span className="text-gray-600">Selected</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-100" />
+            <div className="w-3 h-3 rounded bg-gray-200" />
             <span className="text-gray-600">In range</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gray-50 flex items-center justify-center">
-              <div className="w-1 h-1 bg-red-500 rounded-full" />
+            <div className="w-3 h-3 rounded-full relative">
+              <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-red-500 rounded-full" />
             </div>
             <span className="text-gray-600">Unavailable</span>
           </div>
@@ -530,14 +957,16 @@ const ListingDetails = () => {
         {/* Action buttons */}
         <div className="flex gap-3 pt-4 border-t border-gray-200 mt-4">
           <button
+            type="button"
             onClick={clearDates}
-            className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
           >
             Clear dates
           </button>
           <button
+            type="button"
             onClick={() => setShowCalendar(false)}
-            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+            className="flex-1 px-4 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-sm"
           >
             Done
           </button>
@@ -775,7 +1204,7 @@ const ListingDetails = () => {
                           <span className="font-bold">{listing.rating.toFixed(1)}</span>
                           <span className="text-gray-400">·</span>
                           <span className="underline cursor-pointer hover:text-gray-900">
-                            {listing.reviews?.length || 0} reviews
+                            {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
                           </span>
                         </div>
                       )}
@@ -1034,7 +1463,10 @@ const ListingDetails = () => {
 
                   {/* Large Reserve Button */}
                   <button 
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
                       if (!user?.uid) {
                         if (window.confirm('Please sign in to make a reservation. Would you like to sign in?')) {
                           navigate('/login');
@@ -1048,18 +1480,40 @@ const ListingDetails = () => {
                         return;
                       }
                       
+                      // Validate that selected dates don't include unavailable dates
+                      if (listing.category === 'home' && checkIn && checkOut) {
+                        if (hasUnavailableDatesInRange(checkIn, checkOut)) {
+                          alert('Your selected dates include unavailable dates. Please select different dates.');
+                          return;
+                        }
+                      }
+                      
+                      // Validate listing ID exists
+                      if (!listing?.id) {
+                        console.error('Listing ID is missing:', listing);
+                        alert('Listing information is incomplete. Please refresh the page and try again.');
+                        return;
+                      }
+                      
                       // Prepare booking data
                       const bookingDataToPass = {
                         listingId: listing.id,
                         checkIn: checkIn || null,
                         checkOut: checkOut || null,
-                        guests: guests,
-                        nights: nights,
-                        category: listing.category
+                        guests: guests || 1,
+                        nights: nights || 0,
+                        category: listing.category || 'home'
                       };
                       
+                      console.log('🚀 Navigating to payment with booking data:', bookingDataToPass);
+                      
                       // Store in sessionStorage as backup (in case state is lost)
-                      sessionStorage.setItem('bookingData', JSON.stringify(bookingDataToPass));
+                      try {
+                        sessionStorage.setItem('bookingData', JSON.stringify(bookingDataToPass));
+                        console.log('✅ Stored booking data in sessionStorage');
+                      } catch (error) {
+                        console.error('❌ Failed to store booking data in sessionStorage:', error);
+                      }
                       
                       // Navigate to payment page with booking data
                       navigate('/payment', {
@@ -1068,6 +1522,7 @@ const ListingDetails = () => {
                         }
                       });
                     }}
+                    type="button"
                     className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] mb-3"
                   >
                     {listing.category === 'service' && 'Book Service'}
@@ -1307,7 +1762,7 @@ const ListingDetails = () => {
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="bg-slate-50 rounded-xl p-3">
                           <p className="text-2xl font-bold text-emerald-600 mb-1">
-                            {listing.reviews?.length || 0}
+                            {reviews.length}
                           </p>
                           <p className="text-xs text-gray-500 mb-1 font-medium">Reviews</p>
                         </div>
@@ -1372,56 +1827,211 @@ const ListingDetails = () => {
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
                     <FaStar className="text-yellow-400 fill-current" />
-                    {listing.rating > 0 ? listing.rating.toFixed(1) : '5.0'} · {listing.reviews?.length || 0} reviews
+                    {listing.rating > 0 ? listing.rating.toFixed(1) : reviews.length > 0 ? '0.0' : '5.0'} · {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
                   </h2>
+                  {canReview && !showReviewForm && (
+                    <button
+                      onClick={() => setShowReviewForm(true)}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold text-sm"
+                    >
+                      Write a Review
+                    </button>
+                  )}
+                  {hasReviewed && (
+                    <span className="text-sm text-gray-500 font-medium">You've already reviewed this listing</span>
+                  )}
                 </div>
 
-                {/* Rating Breakdown */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  {['Cleanliness', 'Accuracy', 'Communication', 'Location', 'Check-in', 'Value'].map((category, idx) => (
-                    <div key={category} className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-gray-700 w-32">{category}</span>
-                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-600 rounded-full"
-                          style={{ width: `${85 + Math.random() * 15}%` }}
+                {/* Review Form */}
+                {showReviewForm && canReview && (
+                  <div className="mb-8 p-6 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Write a Review</h3>
+                    <form onSubmit={handleReviewSubmit} className="space-y-4">
+                      {/* Overall Rating */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Overall Rating *</label>
+                        <div className="flex items-center gap-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
+                              className="focus:outline-none"
+                            >
+                              <FaStar 
+                                className={`w-8 h-8 transition-colors ${
+                                  star <= reviewForm.rating 
+                                    ? 'text-yellow-400 fill-current' 
+                                    : 'text-gray-300'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                          <span className="ml-2 text-sm font-medium text-gray-700">{reviewForm.rating} / 5</span>
+                        </div>
+                      </div>
+
+                      {/* Category Ratings */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {['cleanliness', 'accuracy', 'communication', 'location', 'checkin', 'value'].map((category) => (
+                          <div key={category}>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              {getCategoryLabel(category)}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setReviewForm(prev => ({ ...prev, [category]: star }))}
+                                  className="focus:outline-none"
+                                >
+                                  <FaStar 
+                                    className={`w-5 h-5 transition-colors ${
+                                      star <= reviewForm[category] 
+                                        ? 'text-yellow-400 fill-current' 
+                                        : 'text-gray-300'
+                                    }`}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Comment */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Your Review *</label>
+                        <textarea
+                          value={reviewForm.comment}
+                          onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                          placeholder="Share your experience with this listing..."
+                          rows={5}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none resize-none"
+                          required
                         />
                       </div>
-                      <span className="text-sm font-bold text-gray-900 w-8">{(4.5 + Math.random() * 0.5).toFixed(1)}</span>
-                    </div>
-                  ))}
-                </div>
 
-                {/* Sample Reviews */}
-                <div className="space-y-4">
-                  {[1, 2, 3].map((review) => (
-                    <div key={review} className="border-t border-gray-200 pt-6 first:border-0 first:pt-0">
-                      <div className="flex items-start gap-4 mb-3">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold flex-shrink-0">
-                          J{review}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <h4 className="font-bold text-gray-900">Guest {review}</h4>
-                            <span className="text-sm text-gray-500">October 2024</span>
-                          </div>
-                          <div className="flex items-center gap-1 mb-2">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <FaStar key={star} className="w-3 h-3 text-yellow-400 fill-current" />
-                            ))}
-                          </div>
-                          <p className="text-gray-700 leading-relaxed">
-                            Amazing stay! The place was exactly as described and the host was very responsive. Highly recommend!
-                          </p>
-                        </div>
+                      {/* Submit Buttons */}
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          type="submit"
+                          disabled={submittingReview}
+                          className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {submittingReview ? 'Submitting...' : 'Submit Review'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowReviewForm(false);
+                            setReviewForm({
+                              rating: 5,
+                              cleanliness: 5,
+                              accuracy: 5,
+                              communication: 5,
+                              location: 5,
+                              checkin: 5,
+                              value: 5,
+                              comment: ''
+                            });
+                          }}
+                          disabled={submittingReview}
+                          className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Cancel
+                        </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    </form>
+                  </div>
+                )}
 
-                <button className="mt-6 px-6 py-3 border-2 border-gray-900 text-gray-900 rounded-xl font-semibold hover:bg-gray-900 hover:text-white transition-colors">
-                  Show all {listing.reviews?.length || 0} reviews
-                </button>
+                {reviews.length > 0 ? (
+                  <>
+                    {/* Rating Breakdown */}
+                    {(() => {
+                      const categoryRatings = calculateCategoryRatings();
+                      const categories = ['cleanliness', 'accuracy', 'communication', 'location', 'checkin', 'value'];
+                      const categoriesWithRatings = categories.filter(cat => categoryRatings[cat] > 0);
+                      
+                      if (categoriesWithRatings.length === 0) return null;
+                      
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                          {categoriesWithRatings.map((category) => {
+                            const rating = categoryRatings[category];
+                            const percentage = (rating / 5) * 100;
+                            return (
+                              <div key={category} className="flex items-center gap-3">
+                                <span className="text-sm font-medium text-gray-700 w-32">{getCategoryLabel(category)}</span>
+                                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-emerald-600 rounded-full transition-all"
+                                    style={{ width: `${percentage}%` }}
+                                  />
+                                </div>
+                                <span className="text-sm font-bold text-gray-900 w-8">{rating.toFixed(1)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Reviews List */}
+                    <div className="space-y-4">
+                      {(showAllReviews ? reviews : reviews.slice(0, 3)).map((review, idx) => {
+                        const reviewerName = review.reviewerName || review.guestName || 'Guest';
+                        const rating = review.rating || review.overallRating || 5;
+                        const comment = review.comment || review.text || review.review || '';
+                        const reviewDate = review.createdAt;
+                        
+                        return (
+                          <div key={idx} className="border-t border-gray-200 pt-6 first:border-0 first:pt-0">
+                            <div className="flex items-start gap-4 mb-3">
+                              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                                {reviewerName ? getInitials(reviewerName) : 'G'}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h4 className="font-bold text-gray-900">{reviewerName}</h4>
+                                  <span className="text-sm text-gray-500">{formatReviewDate(reviewDate)}</span>
+                                </div>
+                                <div className="flex items-center gap-1 mb-2">
+                                  {[1, 2, 3, 4, 5].map((star) => (
+                                    <FaStar 
+                                      key={star} 
+                                      className={`w-3 h-3 ${star <= rating ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} 
+                                    />
+                                  ))}
+                                </div>
+                                {comment && (
+                                  <p className="text-gray-700 leading-relaxed">{comment}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {reviews.length > 3 && (
+                      <button 
+                        onClick={() => setShowAllReviews(!showAllReviews)}
+                        className="mt-6 px-6 py-3 border-2 border-gray-900 text-gray-900 rounded-xl font-semibold hover:bg-gray-900 hover:text-white transition-colors"
+                      >
+                        {showAllReviews ? 'Show less' : `Show all ${reviews.length} reviews`}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-12">
+                    <FaStar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No reviews yet</h3>
+                    <p className="text-gray-600">Be the first to review this listing!</p>
+                  </div>
+                )}
               </div>
 
               {/* Location Section */}
@@ -1719,7 +2329,10 @@ const ListingDetails = () => {
 
                   {/* Large Reserve Button */}
                   <button 
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
                       if (!user?.uid) {
                         if (window.confirm('Please sign in to make a reservation. Would you like to sign in?')) {
                           navigate('/login');
@@ -1733,18 +2346,40 @@ const ListingDetails = () => {
                         return;
                       }
                       
+                      // Validate that selected dates don't include unavailable dates
+                      if (listing.category === 'home' && checkIn && checkOut) {
+                        if (hasUnavailableDatesInRange(checkIn, checkOut)) {
+                          alert('Your selected dates include unavailable dates. Please select different dates.');
+                          return;
+                        }
+                      }
+                      
+                      // Validate listing ID exists
+                      if (!listing?.id) {
+                        console.error('Listing ID is missing:', listing);
+                        alert('Listing information is incomplete. Please refresh the page and try again.');
+                        return;
+                      }
+                      
                       // Prepare booking data
                       const bookingDataToPass = {
                         listingId: listing.id,
                         checkIn: checkIn || null,
                         checkOut: checkOut || null,
-                        guests: guests,
-                        nights: nights,
-                        category: listing.category
+                        guests: guests || 1,
+                        nights: nights || 0,
+                        category: listing.category || 'home'
                       };
                       
+                      console.log('🚀 Navigating to payment with booking data:', bookingDataToPass);
+                      
                       // Store in sessionStorage as backup (in case state is lost)
-                      sessionStorage.setItem('bookingData', JSON.stringify(bookingDataToPass));
+                      try {
+                        sessionStorage.setItem('bookingData', JSON.stringify(bookingDataToPass));
+                        console.log('✅ Stored booking data in sessionStorage');
+                      } catch (error) {
+                        console.error('❌ Failed to store booking data in sessionStorage:', error);
+                      }
                       
                       // Navigate to payment page with booking data
                       navigate('/payment', {
@@ -1753,6 +2388,7 @@ const ListingDetails = () => {
                         }
                       });
                     }}
+                    type="button"
                     className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white py-3.5 rounded-xl font-semibold text-sm transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98] mb-3"
                   >
                     {listing.category === 'service' && 'Book Service'}

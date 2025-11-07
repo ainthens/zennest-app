@@ -51,10 +51,13 @@ const RequireGuestAuth = ({ children }) => {
       }
     };
 
-    if (!loading && user) {
-      checkUserRole();
-    } else if (!loading && !user) {
-      setCheckingRole(false);
+    // Wait for auth to finish loading before checking role
+    if (!loading) {
+      if (user) {
+        checkUserRole();
+      } else {
+        setCheckingRole(false);
+      }
     }
   }, [user, loading]);
 
@@ -63,9 +66,27 @@ const RequireGuestAuth = ({ children }) => {
     return <Loading message="Verifying access..." size="large" fullScreen={true} />;
   }
 
-  // Not authenticated - redirect to login
+  // Not authenticated - redirect to login, preserve any state including bookingData
   if (!user && !loading && !checkingRole) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+    // Preserve bookingData from sessionStorage if state is lost
+    const preservedState = {
+      from: location.pathname,
+      ...location.state
+    };
+    
+    // If we have bookingData in sessionStorage but not in state, add it
+    if (!preservedState.bookingData) {
+      try {
+        const stored = sessionStorage.getItem('bookingData');
+        if (stored) {
+          preservedState.bookingData = JSON.parse(stored);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    }
+    
+    return <Navigate to="/login" state={preservedState} replace />;
   }
 
   // User is a host - redirect to host dashboard

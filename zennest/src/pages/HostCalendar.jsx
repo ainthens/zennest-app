@@ -264,7 +264,7 @@ const HostCalendar = () => {
                         <div>
                           <p className="text-sm text-gray-600">Amount</p>
                           <p className="font-semibold text-emerald-700">
-                            ₱{(booking.totalAmount || 0).toLocaleString()}
+                            ₱{(booking.total || booking.totalAmount || 0).toLocaleString()}
                           </p>
                         </div>
                         <div>

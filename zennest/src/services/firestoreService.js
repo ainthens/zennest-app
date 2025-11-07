@@ -159,6 +159,7 @@ export const createListing = async (listingData) => {
       images: Array.isArray(listingData.images) ? listingData.images : [],
       promo: listingData.promo?.trim() || '',
       amenities: Array.isArray(listingData.amenities) ? listingData.amenities : [],
+      unavailableDates: Array.isArray(listingData.unavailableDates) ? listingData.unavailableDates : [],
       status: listingData.status || 'draft', // 'draft' or 'published'
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -212,6 +213,7 @@ export const updateListing = async (listingId, updates) => {
       // Ensure arrays are arrays
       images: Array.isArray(updates.images) ? updates.images : [],
       amenities: Array.isArray(updates.amenities) ? updates.amenities : [],
+      unavailableDates: Array.isArray(updates.unavailableDates) ? updates.unavailableDates : [],
       updatedAt: serverTimestamp()
     };
     

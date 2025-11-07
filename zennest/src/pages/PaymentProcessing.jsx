@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import useAuth from '../hooks/useAuth';
@@ -31,15 +32,24 @@ const PaymentProcessing = () => {
   
   // Get booking data from location state or sessionStorage
   const getBookingData = () => {
+    // First try location state
     if (location.state?.bookingData) {
+      console.log('📦 Booking data from location state:', location.state.bookingData);
       return location.state.bookingData;
     }
+    // Fallback to sessionStorage
     try {
       const stored = sessionStorage.getItem('bookingData');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        console.log('💾 Booking data from sessionStorage:', parsed);
+        return parsed;
+      }
+    } catch (error) {
+      console.error('❌ Error reading booking data from sessionStorage:', error);
     }
+    console.warn('⚠️ No booking data found in state or sessionStorage');
+    return null;
   };
   
   const bookingData = getBookingData();
@@ -49,6 +59,7 @@ const PaymentProcessing = () => {
   const [processing, setProcessing] = useState(false);
   const [listing, setListing] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [pendingBookingId, setPendingBookingId] = useState(null); // Store booking ID for PayPal flow
   
   // Step 1: Choose when to pay
   const [paymentTiming, setPaymentTiming] = useState('now'); // 'now' or 'later'
@@ -66,8 +77,8 @@ const PaymentProcessing = () => {
   const [finalTotal, setFinalTotal] = useState(0);
 
   useEffect(() => {
+    // RequireGuestAuth already handles authentication, but ensure user is available before fetching
     if (!user?.uid) {
-      navigate('/login');
       return;
     }
 
@@ -85,20 +96,25 @@ const PaymentProcessing = () => {
       }
     }
 
-    if (!finalBookingData || !finalBookingData.listingId) {
-      console.error('No booking data found. State:', location.state?.bookingData, 'SessionStorage:', sessionStorage.getItem('bookingData'));
-      alert('Booking information is missing. Please try again from the listing page.');
-      navigate('/homestays');
-      return;
+    // Only fetch data if we have booking data and user is available, otherwise let the component render the error message
+    if (finalBookingData && finalBookingData.listingId && user?.uid) {
+      fetchData(finalBookingData);
+    } else if (!finalBookingData || !finalBookingData.listingId) {
+      setLoading(false);
     }
-
-    fetchData(finalBookingData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
   const fetchData = async (dataToUse = null) => {
     try {
       setLoading(true);
+      
+      // Ensure user is available
+      if (!user?.uid) {
+        console.error('User not available when fetching data');
+        setLoading(false);
+        return;
+      }
       
       // Use provided data or fallback to bookingData from state
       const data = dataToUse || bookingData || (() => {
@@ -111,19 +127,28 @@ const PaymentProcessing = () => {
       })();
       
       if (!data || !data.listingId) {
-        alert('Booking information is missing. Please try again from the listing page.');
-        navigate('/homestays');
+        console.error('Missing booking data:', { data, listingId: data?.listingId });
+        setLoading(false);
         return;
       }
       
       // Fetch listing details
       const listingRef = doc(db, 'listings', data.listingId);
       const listingSnap = await getDoc(listingRef);
-      if (listingSnap.exists()) {
-        const listingData = { id: listingSnap.id, ...listingSnap.data() };
-        setListing(listingData);
-        
-        // Fetch wallet balance
+      
+      if (!listingSnap.exists()) {
+        console.error('Listing not found:', data.listingId);
+        alert('Listing not found. Please try again.');
+        setLoading(false);
+        navigate('/homestays');
+        return;
+      }
+      
+      const listingData = { id: listingSnap.id, ...listingSnap.data() };
+      setListing(listingData);
+      
+      // Fetch wallet balance
+      try {
         const walletRef = doc(db, 'wallets', user.uid);
         const walletSnap = await getDoc(walletRef);
         if (walletSnap.exists()) {
@@ -139,17 +164,23 @@ const PaymentProcessing = () => {
           });
           setWalletBalance(0);
         }
-
-        // Calculate totals
-        calculateTotals(data, listingData);
-      } else {
-        alert('Listing not found. Please try again.');
-        navigate('/homestays');
+      } catch (walletError) {
+        console.error('Error fetching/creating wallet:', walletError);
+        // Don't block the flow if wallet fails, just set balance to 0
+        setWalletBalance(0);
       }
+
+      // Calculate totals
+      calculateTotals(data, listingData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      alert('Failed to load booking information. Please try again.');
-      navigate('/homestays');
+      console.error('Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      });
+      alert(`Failed to load booking information: ${error.message || 'Please try again.'}`);
+      setLoading(false);
     } finally {
       setLoading(false);
     }
@@ -206,6 +237,178 @@ const PaymentProcessing = () => {
     }
   };
 
+  const createBooking = async () => {
+    const finalBookingData = currentBookingData || bookingData;
+    
+    if (!user?.uid || !listing || !finalBookingData) {
+      throw new Error('Missing booking information. Please try again.');
+    }
+
+    // Create booking document
+    const bookingsRef = collection(db, 'bookings');
+    const bookingDoc = {
+      guestId: user.uid,
+      hostId: listing.hostId,
+      listingId: listing.id,
+      listingTitle: listing.title,
+      listingCategory: listing.category,
+      status: paymentTiming === 'now' ? 'pending' : 'reserved',
+      paymentStatus: paymentTiming === 'now' ? 'pending' : 'scheduled',
+      paymentMethod: paymentMethod,
+      paymentTiming: paymentTiming,
+      paypalEmail: paymentMethod === 'paypal' ? paypalEmail : null,
+      checkIn: finalBookingData.checkIn || null,
+      checkOut: finalBookingData.checkOut || null,
+      guests: finalBookingData.guests || 1,
+      nights: finalBookingData.nights || 0,
+      subtotal: totalAmount,
+      serviceFee: serviceFee,
+      total: finalTotal,
+      messageToHost: messageToHost.trim() || null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    const bookingRef = await addDoc(bookingsRef, bookingDoc);
+    return bookingRef.id;
+  };
+
+  const completeWalletPayment = async (bookingId) => {
+    // Deduct from wallet
+    const walletRef = doc(db, 'wallets', user.uid);
+    const newBalance = walletBalance - finalTotal;
+    await updateDoc(walletRef, {
+      balance: newBalance,
+      updatedAt: serverTimestamp()
+    });
+
+    // Create transaction record
+    const transactionsRef = collection(db, 'transactions');
+    await addDoc(transactionsRef, {
+      userId: user.uid,
+      type: 'payment',
+      amount: finalTotal,
+      status: 'completed',
+      description: `Booking payment for ${listing.title}`,
+      paymentMethod: 'wallet',
+      bookingId: bookingId,
+      createdAt: serverTimestamp()
+    });
+
+    // Update booking status
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, {
+      paymentStatus: 'completed',
+      status: 'confirmed',
+      updatedAt: serverTimestamp()
+    });
+  };
+
+  const handlePayPalSuccess = async (paymentId) => {
+    try {
+      setProcessing(true);
+      
+      if (!pendingBookingId) {
+        throw new Error('Booking ID not found');
+      }
+
+      // Update booking status
+      const bookingRef = doc(db, 'bookings', pendingBookingId);
+      await updateDoc(bookingRef, {
+        paymentStatus: 'completed',
+        status: 'confirmed',
+        paypalPaymentId: paymentId,
+        updatedAt: serverTimestamp()
+      });
+
+      // Create transaction record
+      const transactionsRef = collection(db, 'transactions');
+      await addDoc(transactionsRef, {
+        userId: user.uid,
+        type: 'payment',
+        amount: finalTotal,
+        status: 'completed',
+        description: `Booking payment for ${listing.title}`,
+        paymentMethod: 'paypal',
+        bookingId: pendingBookingId,
+        paypalPaymentId: paymentId,
+        createdAt: serverTimestamp()
+      });
+
+      // Send message to host if provided
+      await sendMessageToHost(pendingBookingId);
+
+      // Success - redirect to bookings page
+      navigate('/bookings', { 
+        state: { 
+          success: true, 
+          message: 'Booking confirmed! Payment processed successfully.' 
+        } 
+      });
+    } catch (error) {
+      console.error('Error completing PayPal payment:', error);
+      alert('Payment processed but failed to confirm booking. Please contact support.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const sendMessageToHost = async (bookingId) => {
+    if (!messageToHost.trim() || !listing || !user?.uid) return;
+
+    try {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      if (!bookingSnap.exists()) return;
+
+      const bookingData = bookingSnap.data();
+      
+      // Create or get conversation
+      const conversationId = `${user.uid}_${listing.hostId}_${listing.id}`;
+      const conversationRef = doc(db, 'conversations', conversationId);
+      const conversationSnap = await getDoc(conversationRef);
+
+      if (!conversationSnap.exists()) {
+        await setDoc(conversationRef, {
+          guestId: user.uid,
+          hostId: listing.hostId,
+          listingId: listing.id,
+          listingTitle: listing.title,
+          participants: [user.uid, listing.hostId],
+          lastMessage: messageToHost.trim(),
+          lastMessageAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          unreadCount: { [user.uid]: 0, [listing.hostId]: 1 }
+        });
+      }
+
+      // Send message
+      const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+      await addDoc(messagesRef, {
+        senderId: user.uid,
+        senderName: user.displayName || user.email?.split('@')[0] || 'Guest',
+        senderType: 'guest',
+        text: messageToHost.trim(),
+        read: false,
+        createdAt: serverTimestamp(),
+        listingId: listing.id,
+        listingTitle: listing.title
+      });
+
+      // Update conversation
+      await updateDoc(conversationRef, {
+        lastMessage: messageToHost.trim(),
+        lastMessageAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        [`unreadCount.${listing.hostId}`]: (conversationSnap.data()?.unreadCount?.[listing.hostId] || 0) + 1
+      });
+    } catch (error) {
+      console.error('Error sending message to host:', error);
+      // Don't block the flow if message fails
+    }
+  };
+
   const handleCompleteBooking = async () => {
     const finalBookingData = currentBookingData || bookingData;
     
@@ -220,117 +423,36 @@ const PaymentProcessing = () => {
       return;
     }
 
+    // For PayPal, create booking first and show PayPal buttons
+    if (paymentMethod === 'paypal' && paymentTiming === 'now') {
+      try {
+        setProcessing(true);
+        const bookingId = await createBooking();
+        setPendingBookingId(bookingId);
+        setProcessing(false);
+        // PayPalButtons will handle the payment
+        return;
+      } catch (error) {
+        console.error('Error creating booking:', error);
+        alert('Failed to create booking. Please try again.');
+        setProcessing(false);
+        return;
+      }
+    }
+
+    // For wallet payment or pay later, process immediately
     try {
       setProcessing(true);
 
-      // Create booking document
-      const bookingsRef = collection(db, 'bookings');
-      const bookingDoc = {
-        guestId: user.uid,
-        hostId: listing.hostId,
-        listingId: listing.id,
-        listingTitle: listing.title,
-        listingCategory: listing.category,
-        status: paymentTiming === 'now' ? 'pending' : 'reserved',
-        paymentStatus: paymentTiming === 'now' ? 'pending' : 'scheduled',
-        paymentMethod: paymentMethod,
-        paymentTiming: paymentTiming,
-        paypalEmail: paymentMethod === 'paypal' ? paypalEmail : null,
-        checkIn: finalBookingData.checkIn || null,
-        checkOut: finalBookingData.checkOut || null,
-        guests: finalBookingData.guests || 1,
-        nights: finalBookingData.nights || 0,
-        subtotal: totalAmount,
-        serviceFee: serviceFee,
-        total: finalTotal,
-        messageToHost: messageToHost.trim() || null,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
-      const bookingRef = await addDoc(bookingsRef, bookingDoc);
+      const bookingId = await createBooking();
 
       // Process payment if paying now
-      if (paymentTiming === 'now') {
-        if (paymentMethod === 'wallet') {
-          // Deduct from wallet
-          const walletRef = doc(db, 'wallets', user.uid);
-          const newBalance = walletBalance - finalTotal;
-          await updateDoc(walletRef, {
-            balance: newBalance,
-            updatedAt: serverTimestamp()
-          });
-
-          // Create transaction record
-          const transactionsRef = collection(db, 'transactions');
-          await addDoc(transactionsRef, {
-            userId: user.uid,
-            type: 'payment',
-            amount: finalTotal,
-            status: 'completed',
-            description: `Booking payment for ${listing.title}`,
-            paymentMethod: 'wallet',
-            bookingId: bookingRef.id,
-            createdAt: serverTimestamp()
-          });
-
-          // Update booking status
-          await updateDoc(bookingRef, {
-            paymentStatus: 'completed',
-            status: 'confirmed'
-          });
-        } else if (paymentMethod === 'paypal') {
-          // In a real app, you would integrate with PayPal API here
-          // For now, we'll mark it as pending and update later
-          await updateDoc(bookingRef, {
-            paymentStatus: 'pending_paypal'
-          });
-        }
+      if (paymentTiming === 'now' && paymentMethod === 'wallet') {
+        await completeWalletPayment(bookingId);
       }
 
       // Send message to host if provided
-      if (messageToHost.trim()) {
-        // Create or get conversation
-        const conversationId = `${user.uid}_${listing.hostId}_${listing.id}`;
-        const conversationRef = doc(db, 'conversations', conversationId);
-        const conversationSnap = await getDoc(conversationRef);
-
-        if (!conversationSnap.exists()) {
-          await setDoc(conversationRef, {
-            guestId: user.uid,
-            hostId: listing.hostId,
-            listingId: listing.id,
-            listingTitle: listing.title,
-            participants: [user.uid, listing.hostId],
-            lastMessage: messageToHost.trim(),
-            lastMessageAt: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            unreadCount: { [user.uid]: 0, [listing.hostId]: 1 }
-          });
-        }
-
-        // Send message
-        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-        await addDoc(messagesRef, {
-          senderId: user.uid,
-          senderName: user.displayName || user.email?.split('@')[0] || 'Guest',
-          senderType: 'guest',
-          text: messageToHost.trim(),
-          read: false,
-          createdAt: serverTimestamp(),
-          listingId: listing.id,
-          listingTitle: listing.title
-        });
-
-        // Update conversation
-        await updateDoc(conversationRef, {
-          lastMessage: messageToHost.trim(),
-          lastMessageAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          [`unreadCount.${listing.hostId}`]: (conversationSnap.data()?.unreadCount?.[listing.hostId] || 0) + 1
-        });
-      }
+      await sendMessageToHost(bookingId);
 
       // Success - redirect to bookings page
       navigate('/bookings', { 
@@ -347,6 +469,43 @@ const PaymentProcessing = () => {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const createPayPalOrder = (data, actions) => {
+    try {
+      if (!pendingBookingId) {
+        throw new Error('Booking not created yet');
+      }
+      
+      return actions.order.create({
+        purchase_units: [{
+          amount: {
+            value: (finalTotal / 56).toFixed(2), // Convert PHP to USD (approximate rate)
+            currency_code: 'USD'
+          },
+          description: `Booking payment for ${listing.title}`,
+          custom_id: pendingBookingId
+        }]
+      });
+    } catch (error) {
+      console.error('Error creating PayPal order:', error);
+      alert(error.message || 'Failed to create payment order. Please try again.');
+      return Promise.reject(error);
+    }
+  };
+
+  const onApprovePayPalOrder = (data, actions) => {
+    return actions.order.capture().then((details) => {
+      console.log('PayPal payment approved:', details);
+      if (details.status === 'COMPLETED') {
+        handlePayPalSuccess(details.id);
+      } else {
+        alert('Payment was not completed. Please try again.');
+      }
+    }).catch((error) => {
+      console.error('PayPal payment error:', error);
+      alert('Payment failed. Please try again or contact support.');
+    });
   };
 
   if (loading) {
@@ -798,23 +957,67 @@ const PaymentProcessing = () => {
                   <FaChevronRight className="w-4 h-4" />
                 </button>
               ) : (
-                <button
-                  onClick={handleCompleteBooking}
-                  disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
-                  className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {processing ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Processing...
-                    </>
+                <>
+                  {paymentMethod === 'paypal' && paymentTiming === 'now' && pendingBookingId ? (
+                    <div className="w-full">
+                      {import.meta.env.VITE_PAYPAL_CLIENT_ID && import.meta.env.VITE_PAYPAL_CLIENT_ID !== 'your-paypal-client-id-here' ? (
+                        <PayPalScriptProvider
+                          options={{
+                            'client-id': import.meta.env.VITE_PAYPAL_CLIENT_ID,
+                            currency: 'USD'
+                          }}
+                        >
+                          <PayPalButtons
+                            createOrder={createPayPalOrder}
+                            onApprove={onApprovePayPalOrder}
+                            onError={(err) => {
+                              console.error('PayPal error:', err);
+                              alert('Payment failed. Please try again.');
+                            }}
+                            style={{
+                              layout: 'vertical',
+                              shape: 'rect',
+                              label: 'paypal'
+                            }}
+                          />
+                        </PayPalScriptProvider>
+                      ) : (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                          <p className="text-sm text-yellow-800">
+                            PayPal Client ID not configured. Please add VITE_PAYPAL_CLIENT_ID to your .env file.
+                          </p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          setPendingBookingId(null);
+                          setProcessing(false);
+                        }}
+                        className="w-full mt-3 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                      >
+                        Cancel Payment
+                      </button>
+                    </div>
                   ) : (
-                    <>
-                      <FaLock className="w-4 h-4" />
-                      Confirm Booking
-                    </>
+                    <button
+                      onClick={handleCompleteBooking}
+                      disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
+                      className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {processing ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <FaLock className="w-4 h-4" />
+                          Confirm Booking
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+                </>
               )}
             </div>
           </div>

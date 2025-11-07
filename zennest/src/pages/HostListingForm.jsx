@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { createListing, updateListing } from '../services/firestoreService';
 import { uploadImageToCloudinary } from '../config/cloudinary';
@@ -15,7 +15,10 @@ import {
   FaImage,
   FaSave,
   FaEye,
-  FaTimes
+  FaTimes,
+  FaChevronLeft,
+  FaChevronRight,
+  FaCalendarAlt
 } from 'react-icons/fa';
 
 const HostListingForm = () => {
@@ -46,8 +49,13 @@ const HostListingForm = () => {
     bedrooms: '',
     bathrooms: '',
     guests: '',
-    amenities: []
+    amenities: [],
+    unavailableDates: []
   });
+  
+  // Calendar state for availability management
+  const [showAvailabilityCalendar, setShowAvailabilityCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
     if (isEdit && id) {
@@ -138,7 +146,8 @@ const HostListingForm = () => {
       bathrooms: formData.bathrooms || '',
       guests: formData.guests || '',
       images: formData.images || [],
-      amenities: formData.amenities || []
+      amenities: formData.amenities || [],
+      unavailableDates: formData.unavailableDates || []
     };
 
     const normalizedOriginal = {
@@ -153,7 +162,8 @@ const HostListingForm = () => {
       bathrooms: originalData.bathrooms || '',
       guests: originalData.guests || '',
       images: originalData.images || [],
-      amenities: originalData.amenities || []
+      amenities: originalData.amenities || [],
+      unavailableDates: originalData.unavailableDates || []
     };
 
     // Deep compare objects
@@ -166,6 +176,22 @@ const HostListingForm = () => {
       const listingSnap = await getDoc(listingRef);
       if (listingSnap.exists()) {
         const data = listingSnap.data();
+        
+        // Convert unavailableDates from Firestore Timestamps to date strings
+        let unavailableDates = [];
+        if (data.unavailableDates && Array.isArray(data.unavailableDates)) {
+          unavailableDates = data.unavailableDates.map(date => {
+            if (date?.toDate) {
+              return date.toDate().toISOString().split('T')[0];
+            } else if (date instanceof Date) {
+              return date.toISOString().split('T')[0];
+            } else if (typeof date === 'string') {
+              return date;
+            }
+            return null;
+          }).filter(Boolean);
+        }
+        
         const formattedData = {
           title: data.title || '',
           category: data.category || 'home',
@@ -179,7 +205,8 @@ const HostListingForm = () => {
           bedrooms: data.bedrooms || '',
           bathrooms: data.bathrooms || '',
           guests: data.guests || '',
-          amenities: data.amenities || []
+          amenities: data.amenities || [],
+          unavailableDates: unavailableDates
         };
         setFormData(formattedData);
         // Store original data for comparison
@@ -337,6 +364,12 @@ const HostListingForm = () => {
 
     try {
       // Clean up the data - remove empty strings and convert to proper types
+      // Convert unavailableDates to Firestore Timestamps
+      const unavailableDatesTimestamps = (formData.unavailableDates || []).map(dateStr => {
+        const date = new Date(dateStr);
+        return Timestamp.fromDate(date);
+      });
+      
       const listingData = {
         title: formData.title.trim(),
         category: formData.category || 'home',
@@ -351,6 +384,7 @@ const HostListingForm = () => {
         images: formData.images || [],
         promo: formData.promo?.trim() || '',
         amenities: formData.amenities || [],
+        unavailableDates: unavailableDatesTimestamps,
         status: publish ? 'published' : 'draft' // Explicitly set to 'draft' when not publishing
       };
 
@@ -398,7 +432,8 @@ const HostListingForm = () => {
           bathrooms: listingData.bathrooms.toString(),
           guests: listingData.guests.toString(),
           images: listingData.images,
-          amenities: listingData.amenities
+          amenities: listingData.amenities,
+          unavailableDates: formData.unavailableDates
         });
       }
       
@@ -441,6 +476,179 @@ const HostListingForm = () => {
     { value: 'experience', label: 'Experience', icon: FaStar },
     { value: 'service', label: 'Service', icon: FaClock }
   ];
+
+  // Calendar helper functions for availability
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    return { daysInMonth, startingDayOfWeek, year, month };
+  };
+
+  const isDateUnavailable = (date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return formData.unavailableDates.includes(dateStr);
+  };
+
+  const isDateInPast = (date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  const toggleDateAvailability = (date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    setFormData(prev => {
+      const currentDates = prev.unavailableDates || [];
+      if (currentDates.includes(dateStr)) {
+        return {
+          ...prev,
+          unavailableDates: currentDates.filter(d => d !== dateStr)
+        };
+      } else {
+        return {
+          ...prev,
+          unavailableDates: [...currentDates, dateStr].sort()
+        };
+      }
+    });
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
+
+  const prevMonth = () => {
+    const today = new Date();
+    const prevMonthDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    if (prevMonthDate >= new Date(today.getFullYear(), today.getMonth(), 1)) {
+      setCurrentMonth(prevMonthDate);
+    }
+  };
+
+  const renderAvailabilityCalendar = () => {
+    const { daysInMonth, startingDayOfWeek, year, month } = getDaysInMonth(currentMonth);
+    const days = [];
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(<div key={`empty-${i}`} className="aspect-square" />);
+    }
+
+    // Add cells for each day of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const isUnavailable = isDateUnavailable(date);
+      const isPast = isDateInPast(date);
+
+      days.push(
+        <button
+          key={day}
+          type="button"
+          onClick={() => !isPast && toggleDateAvailability(date)}
+          disabled={isPast}
+          className={`
+            aspect-square p-2 text-sm font-medium rounded-lg transition-all relative
+            ${isPast 
+              ? 'text-gray-300 cursor-not-allowed bg-gray-50' 
+              : isUnavailable
+              ? 'bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer border-2 border-red-400'
+              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer border-2 border-transparent hover:border-emerald-300'
+            }
+          `}
+          title={isPast ? 'Cannot select past dates' : isUnavailable ? 'Click to make available' : 'Click to mark unavailable'}
+        >
+          {day}
+          {isUnavailable && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <FaTimes className="w-3 h-3 text-red-600" />
+            </div>
+          )}
+        </button>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <button
+            type="button"
+            onClick={prevMonth}
+            disabled={currentMonth <= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <FaChevronLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          <h3 className="text-lg font-bold text-gray-900">
+            {monthNames[month]} {year}
+          </h3>
+          <button
+            type="button"
+            onClick={nextMonth}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <FaChevronRight className="w-5 h-5 text-gray-700" />
+          </button>
+        </div>
+
+        {/* Day labels */}
+        <div className="grid grid-cols-7 gap-2 mb-3">
+          {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
+            <div key={day} className="text-center text-xs font-bold text-gray-500 uppercase">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar days */}
+        <div className="grid grid-cols-7 gap-2 mb-4">
+          {days}
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 pt-4 border-t border-gray-200 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-emerald-50 border-2 border-emerald-300" />
+            <span className="text-gray-600">Available</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-red-100 border-2 border-red-400 relative">
+              <FaTimes className="w-2 h-2 text-red-600 absolute inset-0 m-auto" />
+            </div>
+            <span className="text-gray-600">Unavailable</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gray-50" />
+            <span className="text-gray-600">Past dates</span>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 pt-4 border-t border-gray-200 mt-4">
+          <button
+            type="button"
+            onClick={() => setFormData(prev => ({ ...prev, unavailableDates: [] }))}
+            className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+          >
+            Clear All
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAvailabilityCalendar(false)}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -941,6 +1149,86 @@ const HostListingForm = () => {
             )}
           </div>
         </div>
+
+        {/* Availability Calendar - Only for home listings */}
+        {formData.category === 'home' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Availability Calendar
+              <span className="text-xs text-gray-500 ml-2">(Mark dates as unavailable)</span>
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowAvailabilityCalendar(!showAvailabilityCalendar)}
+                className="w-full border-2 border-gray-300 rounded-lg p-4 hover:border-emerald-500 focus:border-emerald-500 transition-colors text-left"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FaCalendarAlt className="text-emerald-600 text-xl" />
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        {formData.unavailableDates.length === 0 
+                          ? 'All dates available' 
+                          : `${formData.unavailableDates.length} date${formData.unavailableDates.length === 1 ? '' : 's'} marked unavailable`}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Click to manage availability
+                      </p>
+                    </div>
+                  </div>
+                  <FaChevronRight className={`text-gray-400 transition-transform ${showAvailabilityCalendar ? 'rotate-90' : ''}`} />
+                </div>
+              </button>
+
+              {/* Calendar Dropdown */}
+              <AnimatePresence>
+                {showAvailabilityCalendar && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute top-full left-0 right-0 mt-2 z-50"
+                  >
+                    {renderAvailabilityCalendar()}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {formData.unavailableDates.length > 0 && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-600 mb-2 font-semibold">Unavailable dates:</p>
+                <div className="flex flex-wrap gap-2">
+                  {formData.unavailableDates.slice(0, 5).map((dateStr) => (
+                    <span
+                      key={dateStr}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-medium"
+                    >
+                      {new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData(prev => ({
+                            ...prev,
+                            unavailableDates: prev.unavailableDates.filter(d => d !== dateStr)
+                          }));
+                        }}
+                        className="hover:text-red-900"
+                      >
+                        <FaTimes className="w-2 h-2" />
+                      </button>
+                    </span>
+                  ))}
+                  {formData.unavailableDates.length > 5 && (
+                    <span className="inline-flex items-center px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs font-medium">
+                      +{formData.unavailableDates.length - 5} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">

@@ -88,7 +88,7 @@ const HostDashboardOverview = () => {
 
       const totalEarnings = bookings
         .filter(b => b.status === 'completed' || b.status === 'confirmed')
-        .reduce((sum, b) => sum + (b.totalAmount || 0), 0);
+        .reduce((sum, b) => sum + (b.total || b.totalAmount || 0), 0);
 
       setStats({
         totalListings: listings.length,
@@ -359,7 +359,7 @@ const HostDashboardOverview = () => {
                     <p className="text-xs text-gray-600">{booking.listingTitle || 'Listing'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-sm text-emerald-700">₱{(booking.totalAmount || 0).toLocaleString()}</p>
+                    <p className="font-semibold text-sm text-emerald-700">₱{(booking.total || booking.totalAmount || 0).toLocaleString()}</p>
                     <p className="text-[10px] text-gray-500">
                       {booking.checkIn?.toDate ? booking.checkIn.toDate().toLocaleDateString() : 'Today'}
                     </p>
@@ -422,7 +422,7 @@ const HostDashboardOverview = () => {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-sm text-emerald-700">₱{(booking.totalAmount || 0).toLocaleString()}</p>
+                    <p className="font-semibold text-sm text-emerald-700">₱{(booking.total || booking.totalAmount || 0).toLocaleString()}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <FaChevronRight className="text-[10px] text-gray-400" />
                     </div>

@@ -31,10 +31,13 @@ import UserSettings from "./pages/UserSettings";
 import UserFavorites from "./pages/UserFavorites";
 import UserMessages from "./pages/UserMessages";
 import UserBookings from "./pages/UserBookings";
+import BookingDetails from "./pages/BookingDetails";
 import UserWallet from "./pages/UserWallet";
 import UserPoints from "./pages/UserPoints";
 import Chat from "./pages/Chat";
 import PaymentProcessing from "./pages/PaymentProcessing";
+import PayPalReturn from "./pages/PayPalReturn";
+import PayPalCancel from "./pages/PayPalCancel";
 import Loading from "./components/Loading";
 
 // Error Boundary Component for better error handling
@@ -307,11 +310,41 @@ const AppContent = () => {
                 }
               />
               <Route
+                path="/booking/:id"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <BookingDetails />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
                 path="/payment"
                 element={
                   <RouteErrorBoundary>
                     <RequireGuestAuth>
                       <PaymentProcessing />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/payment/paypal-return"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <PayPalReturn />
+                    </RequireGuestAuth>
+                  </RouteErrorBoundary>
+                }
+              />
+              <Route
+                path="/payment/paypal-cancel"
+                element={
+                  <RouteErrorBoundary>
+                    <RequireGuestAuth>
+                      <PayPalCancel />
                     </RequireGuestAuth>
                   </RouteErrorBoundary>
                 }

@@ -459,16 +459,6 @@ const Register = () => {
           transition={{ duration: 0.5, type: "spring", bounce: 0.15 }}
           className="w-full max-w-md"
         >
-          {/* Back to Home */}
-          <motion.button
-            onClick={() => navigate("/")}
-            whileHover={{ x: -4 }}
-            className="mb-6 flex items-center gap-2 text-gray-600 hover:text-emerald-700 transition-colors group"
-            style={{ fontFamily: 'Poppins, sans-serif' }}
-          >
-            <FaArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-xs font-medium">Back to Home</span>
-          </motion.button>
 
           {/* Logo & Title */}
           <div className="text-center mb-6">
@@ -917,7 +907,7 @@ const Register = () => {
             onClick={() => navigate("/host/register")}
             disabled={loading}
             style={{ fontFamily: 'Poppins, sans-serif' }}
-            className="mt-5 w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs"
+            className="mt-5 w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-xs"
           >
             <FaUserTie className="w-4 h-4" />
             <span>Become a Host Instead</span>

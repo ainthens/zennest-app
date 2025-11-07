@@ -78,8 +78,24 @@ const Login = () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const from = location.state?.from;
+      const bookingData = location.state?.bookingData;
+      
+      // If we have a 'from' path and it's not the current path, navigate there
+      // Preserve bookingData if it exists
       if (from && from !== location.pathname) {
-        navigate(from, { replace: true });
+        navigate(from, { 
+          replace: true,
+          state: bookingData ? { bookingData } : undefined
+        });
+        return;
+      }
+
+      // If we have bookingData but no 'from', go to payment page
+      if (bookingData) {
+        navigate('/payment', { 
+          replace: true,
+          state: { bookingData }
+        });
         return;
       }
 
@@ -266,16 +282,7 @@ const Login = () => {
           transition={{ duration: 0.5, type: "spring", bounce: 0.15 }}
           className="w-full max-w-md"
         >
-          {/* Back to Home - Top Left */}
-          <motion.button
-            onClick={() => navigate("/")}
-            whileHover={{ x: -4 }}
-            className="mb-5 flex items-center gap-2 text-gray-600 hover:text-emerald-700 transition-colors group"
-            style={{ fontFamily: 'Poppins, sans-serif' }}
-          >
-            <FaArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-xs font-medium">Back to Home</span>
-          </motion.button>
+
 
           {/* Logo & Welcome */}
           <div className="text-center mb-5">
