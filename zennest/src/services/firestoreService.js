@@ -477,13 +477,46 @@ export const getHostBookings = async (hostId, status = null) => {
   }
 };
 
-export const updateBookingStatus = async (bookingId, status) => {
+export const updateBookingStatus = async (bookingId, status, hostId = null) => {
   try {
     const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      throw new Error('Booking not found');
+    }
+    
+    const bookingData = bookingSnap.data();
+    const previousStatus = bookingData.status;
+    
     await updateDoc(bookingRef, {
       status,
       updatedAt: serverTimestamp()
     });
+    
+    // Award points for first completed booking
+    if (status === 'completed' && previousStatus !== 'completed' && hostId) {
+      try {
+        // Check if this is the host's first completed booking
+        const bookingsRef = collection(db, 'bookings');
+        const completedBookingsQuery = query(
+          bookingsRef,
+          where('hostId', '==', hostId),
+          where('status', '==', 'completed')
+        );
+        const completedBookings = await getDocs(completedBookingsQuery);
+        
+        // If this is the first completed booking (only this one exists)
+        if (completedBookings.size === 1) {
+          await updateHostPoints(hostId, 100, 'Completed first booking');
+          console.log('✅ Points awarded for first completed booking');
+        }
+      } catch (pointsError) {
+        console.error('Error awarding points for completed booking:', pointsError);
+        // Don't fail the booking update if points fail
+      }
+    }
+    
     return { success: true };
   } catch (error) {
     console.error('Error updating booking status:', error);
@@ -869,6 +902,21 @@ export const createCoupon = async (couponData) => {
   }
 };
 
+export const updateCoupon = async (couponId, updates) => {
+  try {
+    if (!couponId) {
+      throw new Error('Coupon ID is required to update a coupon');
+    }
+    
+    const couponRef = doc(db, 'coupons', couponId);
+    await updateDoc(couponRef, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating coupon:', error);
+    throw error;
+  }
+};
+
 export const getHostCoupons = async (hostId) => {
   try {
     if (!hostId) {
@@ -922,6 +970,90 @@ export const getHostCoupons = async (hostId) => {
       error: error.message || 'Failed to fetch coupons',
       code: error.code 
     };
+  }
+};
+
+// Validate and get promo code
+export const validatePromoCode = async (code, listingId, hostId, subtotal) => {
+  try {
+    if (!code || !code.trim()) {
+      return { success: false, error: 'Promo code is required' };
+    }
+
+    const couponsRef = collection(db, 'coupons');
+    const codeUpper = code.trim().toUpperCase();
+    
+    // Query by code and hostId
+    const q = query(
+      couponsRef,
+      where('code', '==', codeUpper),
+      where('hostId', '==', hostId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return { success: false, error: 'Invalid promo code' };
+    }
+
+    const couponDoc = querySnapshot.docs[0];
+    const coupon = { id: couponDoc.id, ...couponDoc.data() };
+
+    // Check if coupon is active
+    if (!coupon.active) {
+      return { success: false, error: 'This promo code is no longer active' };
+    }
+
+    // Check validity dates
+    const now = new Date();
+    if (coupon.validFrom) {
+      const validFrom = coupon.validFrom.toDate ? coupon.validFrom.toDate() : new Date(coupon.validFrom);
+      if (now < validFrom) {
+        return { success: false, error: 'This promo code is not yet valid' };
+      }
+    }
+    
+    if (coupon.validUntil) {
+      const validUntil = coupon.validUntil.toDate ? coupon.validUntil.toDate() : new Date(coupon.validUntil);
+      if (now > validUntil) {
+        return { success: false, error: 'This promo code has expired' };
+      }
+    }
+
+    // Check minimum purchase
+    if (coupon.minPurchase && subtotal < coupon.minPurchase) {
+      return { 
+        success: false, 
+        error: `Minimum purchase of ₱${coupon.minPurchase.toLocaleString()} required` 
+      };
+    }
+
+    // Check max uses
+    if (coupon.maxUses && coupon.usageCount >= coupon.maxUses) {
+      return { success: false, error: 'This promo code has reached its usage limit' };
+    }
+
+    // Check if coupon is for this listing (if listingId is specified)
+    if (coupon.listingId && coupon.listingId !== listingId) {
+      return { success: false, error: 'This promo code is not valid for this listing' };
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (coupon.discountType === 'percentage') {
+      discountAmount = (subtotal * coupon.discount) / 100;
+    } else {
+      discountAmount = coupon.discount;
+    }
+
+    return {
+      success: true,
+      coupon: coupon,
+      discountAmount: discountAmount
+    };
+  } catch (error) {
+    console.error('Error validating promo code:', error);
+    return { success: false, error: 'Failed to validate promo code. Please try again.' };
   }
 };
 
@@ -1242,6 +1374,157 @@ export const updatePaymentMethods = async (userId, paymentMethods) => {
   } catch (error) {
     console.error('Error updating payment methods:', error);
     throw error;
+  }
+};
+
+// Transfer payment to host
+export const transferPaymentToHost = async (hostId, amount, bookingId, listingTitle) => {
+  try {
+    if (!hostId || !amount || amount <= 0) {
+      throw new Error('Invalid host ID or amount');
+    }
+
+    // Get host profile to check payment methods
+    const hostResult = await getHostProfile(hostId);
+    if (!hostResult.success || !hostResult.data) {
+      throw new Error('Host profile not found');
+    }
+
+    const hostData = hostResult.data;
+    const paymentMethods = hostData.paymentMethods || [];
+
+    // Find default payment method
+    const defaultMethod = paymentMethods.find(method => method.isDefault) || paymentMethods[0];
+
+    if (!defaultMethod) {
+      console.warn('⚠️ No payment method configured for host. Funds will be added to host wallet.');
+      // Add to wallet if no payment method
+      return await transferToHostWallet(hostId, amount, bookingId, listingTitle);
+    }
+
+    // Transfer based on payment method type
+    if (defaultMethod.type === 'wallet') {
+      // Transfer to host wallet
+      return await transferToHostWallet(hostId, amount, bookingId, listingTitle);
+    } else if (defaultMethod.type === 'paypal') {
+      // For PayPal, we'll add to wallet and mark for manual transfer
+      // In production, you would integrate with PayPal API here
+      console.log('💰 PayPal transfer initiated (simulated):', {
+        hostId,
+        amount,
+        paypalEmail: defaultMethod.paypalEmail
+      });
+      // Still add to wallet for tracking
+      const walletResult = await transferToHostWallet(hostId, amount, bookingId, listingTitle);
+      // Create a pending transfer record
+      await createPendingTransfer(hostId, amount, 'paypal', defaultMethod.paypalEmail, bookingId);
+      return walletResult;
+    } else if (defaultMethod.type === 'bank') {
+      // For bank transfer, we'll add to wallet and mark for manual transfer
+      console.log('💰 Bank transfer initiated (simulated):', {
+        hostId,
+        amount,
+        bankAccount: defaultMethod.accountNumber
+      });
+      // Still add to wallet for tracking
+      const walletResult = await transferToHostWallet(hostId, amount, bookingId, listingTitle);
+      // Create a pending transfer record
+      await createPendingTransfer(hostId, amount, 'bank', defaultMethod.accountNumber, bookingId);
+      return walletResult;
+    } else {
+      // Default to wallet
+      return await transferToHostWallet(hostId, amount, bookingId, listingTitle);
+    }
+  } catch (error) {
+    console.error('❌ Error transferring payment to host:', error);
+    throw error;
+  }
+};
+
+// Transfer to host wallet
+const transferToHostWallet = async (hostId, amount, bookingId, listingTitle) => {
+  try {
+    // Get or create host wallet
+    const walletRef = doc(db, 'wallets', hostId);
+    const walletSnap = await getDoc(walletRef);
+
+    let currentBalance = 0;
+    if (walletSnap.exists()) {
+      currentBalance = walletSnap.data().balance || 0;
+    } else {
+      // Create wallet if it doesn't exist
+      await setDoc(walletRef, {
+        userId: hostId,
+        balance: 0,
+        currency: 'PHP',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    const newBalance = currentBalance + amount;
+
+    // Update wallet balance
+    await updateDoc(walletRef, {
+      balance: newBalance,
+      updatedAt: serverTimestamp()
+    });
+
+    // Create transaction record
+    const transactionsRef = collection(db, 'transactions');
+    await addDoc(transactionsRef, {
+      userId: hostId,
+      type: 'payment_received',
+      amount: amount,
+      status: 'completed',
+      description: `Payment received for booking: ${listingTitle}`,
+      paymentMethod: 'wallet',
+      bookingId: bookingId,
+      createdAt: serverTimestamp()
+    });
+
+    // Update host total earnings
+    const hostRef = doc(db, 'hosts', hostId);
+    const hostSnap = await getDoc(hostRef);
+    if (hostSnap.exists()) {
+      const currentEarnings = hostSnap.data().totalEarnings || 0;
+      await updateDoc(hostRef, {
+        totalEarnings: currentEarnings + amount,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    console.log('✅ Payment transferred to host wallet:', {
+      hostId,
+      amount,
+      newBalance
+    });
+
+    return { success: true, newBalance, method: 'wallet' };
+  } catch (error) {
+    console.error('❌ Error transferring to host wallet:', error);
+    throw error;
+  }
+};
+
+// Create pending transfer record (for PayPal/bank transfers)
+const createPendingTransfer = async (hostId, amount, method, accountDetails, bookingId) => {
+  try {
+    const transfersRef = collection(db, 'pendingTransfers');
+    await addDoc(transfersRef, {
+      hostId: hostId,
+      amount: amount,
+      method: method,
+      accountDetails: accountDetails,
+      bookingId: bookingId,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    console.log('✅ Pending transfer record created:', { hostId, amount, method });
+  } catch (error) {
+    console.error('❌ Error creating pending transfer:', error);
+    // Don't throw - this is non-critical
   }
 };
 

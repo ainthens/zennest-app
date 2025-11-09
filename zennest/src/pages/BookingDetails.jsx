@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getHostProfile, getOrCreateConversation } from '../services/firestoreService';
+import { getHostProfile, getOrCreateConversation, updateHostPoints } from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
 import Loading from '../components/Loading';
@@ -27,8 +27,10 @@ import {
   FaInfoCircle,
   FaShieldAlt,
   FaPrint,
-  FaDownload
+  FaDownload,
+  FaStar
 } from 'react-icons/fa';
+import { Timestamp } from 'firebase/firestore';
 
 const BookingDetails = () => {
   const { id } = useParams();
@@ -42,6 +44,20 @@ const BookingDetails = () => {
   const [cancelBookingId, setCancelBookingId] = useState(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    cleanliness: 5,
+    accuracy: 5,
+    communication: 5,
+    location: 5,
+    checkin: 5,
+    value: 5,
+    comment: ''
+  });
 
   useEffect(() => {
     if (id && user) {
@@ -124,7 +140,11 @@ const BookingDetails = () => {
           const listingRef = doc(db, 'listings', bookingData.listingId);
           const listingSnap = await getDoc(listingRef);
           if (listingSnap.exists()) {
-            setListing({ id: listingSnap.id, ...listingSnap.data() });
+            const listingData = { id: listingSnap.id, ...listingSnap.data() };
+            setListing(listingData);
+            
+            // Check if user can review this booking
+            checkCanReview(bookingWithDates, listingData);
             
             // Fetch host profile
             if (listingSnap.data().hostId) {
@@ -150,7 +170,7 @@ const BookingDetails = () => {
     if (booking.status === 'cancelled') return 'cancelled';
     
     if (!booking.checkIn || !booking.checkOut) {
-      if (booking.status === 'confirmed') return 'active';
+      if (booking.status === 'confirmed' || booking.status === 'completed') return 'active';
       if (booking.status === 'pending' || booking.status === 'reserved') return 'upcoming';
       return 'past';
     }
@@ -162,6 +182,183 @@ const BookingDetails = () => {
     if (now < checkIn) return 'upcoming';
     if (now >= checkIn && now <= checkOut) return 'active';
     return 'past';
+  };
+
+  const checkCanReview = (booking, listingData) => {
+    if (!user?.uid || !booking || !listingData) {
+      setCanReview(false);
+      return;
+    }
+
+    // Booking must be completed
+    let isCompleted = false;
+    
+    if (booking.status === 'cancelled') {
+      setCanReview(false);
+      return;
+    }
+    
+    // Check if booking has dates
+    if (booking.checkIn && booking.checkOut) {
+      const checkOut = booking.checkOut instanceof Date ? booking.checkOut : new Date(booking.checkOut);
+      const now = new Date();
+      // Booking is completed if checkout date has passed
+      isCompleted = now > checkOut;
+    } else {
+      // For services/experiences without dates, check status
+      isCompleted = booking.status === 'confirmed' || booking.status === 'completed';
+    }
+    
+    if (!isCompleted) {
+      setCanReview(false);
+      return;
+    }
+
+    // Check if user has already reviewed this listing
+    const listingReviews = Array.isArray(listingData.reviews) ? listingData.reviews : [];
+    const userHasReviewed = listingReviews.some(review => 
+      (review.guestId === user.uid || review.userId === user.uid)
+    );
+    
+    setHasReviewed(userHasReviewed);
+    setCanReview(!userHasReviewed);
+  };
+
+  const getCategoryLabel = (category) => {
+    const labels = {
+      cleanliness: 'Cleanliness',
+      accuracy: 'Accuracy',
+      communication: 'Communication',
+      location: 'Location',
+      checkin: 'Check-in',
+      value: 'Value'
+    };
+    return labels[category] || category;
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!user?.uid) {
+      alert('Please sign in to submit a review');
+      return;
+    }
+    
+    if (!reviewForm.comment.trim()) {
+      alert('Please write a review comment');
+      return;
+    }
+    
+    if (!listing?.id) {
+      alert('Listing information not available');
+      return;
+    }
+    
+    try {
+      setSubmittingReview(true);
+      
+      // Get user's name
+      const userName = user.displayName || user.email?.split('@')[0] || 'Guest';
+      
+      // Create review object
+      const newReview = {
+        guestId: user.uid,
+        userId: user.uid,
+        reviewerName: userName,
+        guestName: userName,
+        rating: reviewForm.rating,
+        overallRating: reviewForm.rating,
+        cleanliness: reviewForm.cleanliness,
+        accuracy: reviewForm.accuracy,
+        communication: reviewForm.communication,
+        location: reviewForm.location,
+        checkin: reviewForm.checkin,
+        value: reviewForm.value,
+        comment: reviewForm.comment.trim(),
+        text: reviewForm.comment.trim(),
+        review: reviewForm.comment.trim(),
+        bookingId: booking.id,
+        createdAt: Timestamp.now()
+      };
+      
+      // Get current listing data
+      const listingRef = doc(db, 'listings', listing.id);
+      const listingSnap = await getDoc(listingRef);
+      
+      if (!listingSnap.exists()) {
+        throw new Error('Listing not found');
+      }
+      
+      const currentData = listingSnap.data();
+      const currentReviews = Array.isArray(currentData.reviews) ? currentData.reviews : [];
+      
+      // Check if user already reviewed
+      const alreadyReviewed = currentReviews.some(r => 
+        (r.guestId === user.uid || r.userId === user.uid)
+      );
+      
+      if (alreadyReviewed) {
+        alert('You have already reviewed this listing');
+        setHasReviewed(true);
+        setCanReview(false);
+        setSubmittingReview(false);
+        return;
+      }
+      
+      // Add new review
+      const updatedReviews = [...currentReviews, newReview];
+      
+      // Calculate new average rating
+      const totalRating = updatedReviews.reduce((sum, r) => sum + (r.rating || r.overallRating || 0), 0);
+      const averageRating = updatedReviews.length > 0 ? totalRating / updatedReviews.length : 0;
+      
+      // Update listing with new review and rating
+      await updateDoc(listingRef, {
+        reviews: updatedReviews,
+        rating: parseFloat(averageRating.toFixed(1)),
+        updatedAt: serverTimestamp()
+      });
+      
+      // Award points to host for 5-star review
+      if (reviewForm.rating === 5 && listing.hostId) {
+        try {
+          await updateHostPoints(listing.hostId, 25, 'Received 5-star review');
+          console.log('✅ Points awarded to host for 5-star review');
+        } catch (pointsError) {
+          console.error('Error awarding points for review:', pointsError);
+          // Don't fail the review submission if points fail
+        }
+      }
+      
+      // Update local state
+      setListing(prev => ({
+        ...prev,
+        rating: parseFloat(averageRating.toFixed(1)),
+        reviews: updatedReviews
+      }));
+      
+      // Reset form and close
+      setReviewForm({
+        rating: 5,
+        cleanliness: 5,
+        accuracy: 5,
+        communication: 5,
+        location: 5,
+        checkin: 5,
+        value: 5,
+        comment: ''
+      });
+      setShowReviewForm(false);
+      setCanReview(false);
+      setHasReviewed(true);
+      
+      alert('Thank you for your review!');
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      alert('Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const getStatusInfo = (status) => {
@@ -649,6 +846,144 @@ const BookingDetails = () => {
                   <p className="text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg">
                     {booking.messageToHost}
                   </p>
+                </div>
+              )}
+
+              {/* Review Section */}
+              {listing && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                      <FaStar className="text-yellow-400 fill-current" />
+                      Leave a Review
+                    </h3>
+                    {canReview && !showReviewForm && (
+                      <button
+                        onClick={() => setShowReviewForm(true)}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold text-sm"
+                      >
+                        Write a Review
+                      </button>
+                    )}
+                    {hasReviewed && (
+                      <span className="text-sm text-gray-500 font-medium">You've already reviewed this listing</span>
+                    )}
+                    {!canReview && !hasReviewed && status === 'past' && (
+                      <span className="text-sm text-gray-500 font-medium">Review this completed booking</span>
+                    )}
+                  </div>
+
+                  {/* Review Form */}
+                  {showReviewForm && canReview && (
+                    <div className="mb-6 p-6 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+                      <h4 className="text-lg font-bold text-gray-900 mb-4">Write a Review</h4>
+                      <form onSubmit={handleReviewSubmit} className="space-y-4">
+                        {/* Overall Rating */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Overall Rating *</label>
+                          <div className="flex items-center gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setReviewForm(prev => ({ ...prev, rating: star }))}
+                                className="focus:outline-none"
+                              >
+                                <FaStar 
+                                  className={`w-8 h-8 transition-colors ${
+                                    star <= reviewForm.rating 
+                                      ? 'text-yellow-400 fill-current' 
+                                      : 'text-gray-300'
+                                  }`}
+                                />
+                              </button>
+                            ))}
+                            <span className="ml-2 text-sm font-medium text-gray-700">{reviewForm.rating} / 5</span>
+                          </div>
+                        </div>
+
+                        {/* Category Ratings */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {['cleanliness', 'accuracy', 'communication', 'location', 'checkin', 'value'].map((category) => (
+                            <div key={category}>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                {getCategoryLabel(category)}
+                              </label>
+                              <div className="flex items-center gap-2">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    type="button"
+                                    onClick={() => setReviewForm(prev => ({ ...prev, [category]: star }))}
+                                    className="focus:outline-none"
+                                  >
+                                    <FaStar 
+                                      className={`w-5 h-5 transition-colors ${
+                                        star <= reviewForm[category] 
+                                          ? 'text-yellow-400 fill-current' 
+                                          : 'text-gray-300'
+                                      }`}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Comment */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Your Review *</label>
+                          <textarea
+                            value={reviewForm.comment}
+                            onChange={(e) => setReviewForm(prev => ({ ...prev, comment: e.target.value }))}
+                            placeholder="Share your experience with this listing..."
+                            rows={5}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none resize-none"
+                            required
+                          />
+                        </div>
+
+                        {/* Submit Buttons */}
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            type="submit"
+                            disabled={submittingReview}
+                            className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {submittingReview ? 'Submitting...' : 'Submit Review'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowReviewForm(false);
+                              setReviewForm({
+                                rating: 5,
+                                cleanliness: 5,
+                                accuracy: 5,
+                                communication: 5,
+                                location: 5,
+                                checkin: 5,
+                                value: 5,
+                                comment: ''
+                              });
+                            }}
+                            disabled={submittingReview}
+                            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {!canReview && !hasReviewed && status !== 'past' && (
+                    <div className="text-center py-8 text-gray-500">
+                      <FaStar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-sm">You can leave a review after your booking is completed</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

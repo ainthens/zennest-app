@@ -1,7 +1,9 @@
 // HomeStays.jsx
 import React, { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getPublishedListings, getUserFavorites, toggleFavorite } from "../services/firestoreService";
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../config/firebase";
 import HomeStayCard from "../components/HomeStayCard";
 import Filters from "../components/Filters";
 import Hero from "../components/Hero";
@@ -102,9 +104,12 @@ const AnimatedCard = ({ children, className = "", delay = 0 }) => {
 
 const HomeStays = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState([]);
+  const [previousBookings, setPreviousBookings] = useState([]);
   const [filters, setFilters] = useState({ location: "", guests: 0, locationSelect: "" });
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [priceRange, setPriceRange] = useState("all");
@@ -140,6 +145,57 @@ const HomeStays = () => {
     { value: 'guests', label: 'Most Guests' }
   ];
 
+  // Handle URL search params from Hero search
+  useEffect(() => {
+    const locationParam = searchParams.get('location');
+    const checkInParam = searchParams.get('checkIn');
+    const checkOutParam = searchParams.get('checkOut');
+    const guestsParam = searchParams.get('guests');
+
+    if (locationParam || checkInParam || checkOutParam || guestsParam) {
+      setFilters(prev => ({
+        ...prev,
+        location: locationParam || '',
+        guests: guestsParam ? parseInt(guestsParam) : 0
+      }));
+    }
+  }, [searchParams]);
+
+  // Fetch previous bookings for recommendations
+  useEffect(() => {
+    const fetchPreviousBookings = async () => {
+      if (!user?.uid) return;
+
+      try {
+        const bookingsRef = collection(db, 'bookings');
+        const q = query(
+          bookingsRef,
+          where('guestId', '==', user.uid),
+          where('status', 'in', ['completed', 'confirmed'])
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const bookings = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.listingId) {
+            bookings.push({
+              listingId: data.listingId,
+              location: data.listingLocation || '',
+              category: data.category || 'home'
+            });
+          }
+        });
+        
+        setPreviousBookings(bookings);
+      } catch (error) {
+        console.error('Error fetching previous bookings:', error);
+      }
+    };
+
+    fetchPreviousBookings();
+  }, [user]);
+
   // Fetch published listings from Firestore
   useEffect(() => {
     const fetchListings = async () => {
@@ -170,6 +226,23 @@ const HomeStays = () => {
           
           setListings(mappedListings);
           console.log(`✅ Mapped ${mappedListings.length} listings successfully`);
+
+          // Generate recommendations based on previous bookings
+          if (previousBookings.length > 0 && mappedListings.length > 0) {
+            const recommendedLocations = [...new Set(previousBookings.map(b => b.location).filter(Boolean))];
+            const recommended = mappedListings
+              .filter(listing => {
+                // Recommend listings in similar locations
+                return recommendedLocations.some(loc => 
+                  listing.location.toLowerCase().includes(loc.toLowerCase()) ||
+                  loc.toLowerCase().includes(listing.location.toLowerCase())
+                );
+              })
+              .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+              .slice(0, 6);
+            
+            setRecommendations(recommended);
+          }
         } else {
           console.warn('No listings data returned:', result);
           setListings([]);
@@ -187,7 +260,7 @@ const HomeStays = () => {
     };
 
     fetchListings();
-  }, []);
+  }, [previousBookings]);
 
   // Fetch user favorites from Firestore
   useEffect(() => {
@@ -375,6 +448,37 @@ const HomeStays = () => {
           </p>
         </div>
 
+        {/* Recommendations Section */}
+        {recommendations.length > 0 && user && (
+          <AnimatedSection className="mb-6 sm:mb-8">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl shadow-sm border border-emerald-200 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Recommended for You</h3>
+                  <p className="text-sm text-gray-600">Based on your previous bookings</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {recommendations.map((stay, index) => (
+                  <AnimatedCard key={stay.id} delay={index * 0.1}>
+                    <HomeStayCard
+                      stay={stay}
+                      onView={handleViewDetails}
+                      isFavorite={favorites.has(stay.id)}
+                      onToggleFavorite={() => handleToggleFavorite(stay.id)}
+                    />
+                  </AnimatedCard>
+                ))}
+              </div>
+            </div>
+          </AnimatedSection>
+        )}
+
         <AnimatedSection className="mb-6 sm:mb-8">
           <Filters
             filters={filters}
@@ -394,6 +498,7 @@ const HomeStays = () => {
             totalCount={listings.length}
             searchPlaceholder="Search homestays..."
             itemLabel="homestays"
+            hideSearch={true}
           />
         </AnimatedSection>
 

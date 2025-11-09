@@ -12,11 +12,21 @@ const otpStorage = new Map();
 
 export const sendVerificationEmail = async (userEmail, otp, userName = '') => {
   try {
-    console.log('🔧 EmailJS Configuration Check:', {
+    // Use registration account (OLD ACCOUNT) for guest registration
+    const config = emailjsConfig.registration || {
+      publicKey: emailjsConfig.publicKey,
       serviceId: emailjsConfig.serviceId,
-      templateId: emailjsConfig.templateId,
-      publicKey: emailjsConfig.publicKey ? '✅ Set' : '❌ Missing'
+      templateId: emailjsConfig.templateId
+    };
+
+    console.log('🔧 EmailJS Configuration Check (Registration Account):', {
+      serviceId: config.serviceId,
+      templateId: config.templateId,
+      publicKey: config.publicKey ? '✅ Set' : '❌ Missing'
     });
+
+    // Initialize EmailJS with registration account public key
+    emailjs.init(config.publicKey);
 
     // Calculate expiration time (15 minutes from now)
     const expirationTime = new Date(Date.now() + 15 * 60 * 1000);
@@ -59,10 +69,10 @@ export const sendVerificationEmail = async (userEmail, otp, userName = '') => {
     });
 
     const result = await emailjs.send(
-      emailjsConfig.serviceId,
-      templateParams.templateId || emailjsConfig.templateId, // Allow override
+      config.serviceId,
+      config.templateId,
       templateParams,
-      emailjsConfig.publicKey
+      config.publicKey
     );
 
     console.log('✅ Beautiful email sent successfully!', result.status, result.text);
@@ -122,8 +132,15 @@ export const sendHostVerificationEmail = async (userEmail, otp, userName = '') =
       };
     }
 
+    // Use registration account (OLD ACCOUNT) for host registration
+    const config = emailjsConfig.registration || {
+      publicKey: emailjsConfig.publicKey,
+      serviceId: emailjsConfig.serviceId,
+      hostTemplateId: emailjsConfig.hostTemplateId
+    };
+
     // Validate template configuration
-    if (!emailjsConfig.hostTemplateId || emailjsConfig.hostTemplateId === 'template_xxxxx') {
+    if (!config.hostTemplateId || config.hostTemplateId === 'template_xxxxx') {
       console.error('❌ Host template ID not configured');
       return { 
         success: false, 
@@ -131,13 +148,17 @@ export const sendHostVerificationEmail = async (userEmail, otp, userName = '') =
       };
     }
 
-    console.log('🔧 Sending Host Registration OTP Email:', {
+    console.log('🔧 Sending Host Registration OTP Email (Registration Account):', {
       userEmail,
       userName,
       otp,
-      serviceId: emailjsConfig.serviceId,
-      templateId: emailjsConfig.hostTemplateId
+      serviceId: config.serviceId,
+      templateId: config.hostTemplateId,
+      publicKey: config.publicKey ? '✅ Set' : '❌ Missing'
     });
+
+    // Initialize EmailJS with registration account public key
+    emailjs.init(config.publicKey);
 
     // Calculate expiration time (15 minutes from now)
     const expirationTime = new Date(Date.now() + 15 * 60 * 1000);
@@ -176,10 +197,10 @@ export const sendHostVerificationEmail = async (userEmail, otp, userName = '') =
     });
 
     const result = await emailjs.send(
-      emailjsConfig.serviceId,
-      emailjsConfig.hostTemplateId, // Use host-specific template
+      config.serviceId,
+      config.hostTemplateId, // Use host-specific template
       templateParams,
-      emailjsConfig.publicKey
+      config.publicKey
     );
 
     console.log('✅ Host verification email sent successfully!', result.status, result.text);
@@ -215,16 +236,272 @@ export const resendOTP = async (userEmail, userName = '', isHost = false) => {
   return await sendVerificationEmail(userEmail, newOTP, userName);
 };
 
+// Send booking confirmation email
+export const sendBookingConfirmationEmail = async (bookingData) => {
+  try {
+    // Use booking account (NEW ACCOUNT) for booking emails
+    const config = emailjsConfig.booking || {
+      publicKey: emailjsConfig.publicKey,
+      serviceId: emailjsConfig.serviceId,
+      bookingConfirmationTemplateId: emailjsConfig.bookingConfirmationTemplateId
+    };
+
+    if (!config.bookingConfirmationTemplateId || config.bookingConfirmationTemplateId.trim() === '') {
+      console.warn('⚠️ Booking confirmation template ID not configured. Skipping email.');
+      return { success: false, error: 'Email template not configured' };
+    }
+
+    // Initialize EmailJS with booking account public key
+    emailjs.init(config.publicKey);
+
+    const {
+      guestEmail,
+      guestName,
+      hostEmail,
+      hostName,
+      listingTitle,
+      listingLocation,
+      checkIn,
+      checkOut,
+      guests,
+      nights,
+      totalAmount,
+      bookingId,
+      category
+    } = bookingData;
+
+    // Format dates
+    const formatDate = (date) => {
+      if (!date) return 'N/A';
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'N/A';
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    // Send email to guest
+    const guestTemplateParams = {
+      user_email: guestEmail,
+      user_name: guestName || guestEmail?.split('@')[0] || 'Guest',
+      booking_id: bookingId || 'N/A',
+      listing_title: listingTitle || 'Listing',
+      listing_location: listingLocation || 'Location not specified',
+      check_in: checkIn ? formatDate(checkIn) : 'N/A',
+      check_out: checkOut ? formatDate(checkOut) : 'N/A',
+      guests: guests || 1,
+      nights: nights || 0,
+      total_amount: `₱${(totalAmount || 0).toLocaleString()}`,
+      category: category || 'booking',
+      host_name: hostName || 'Host',
+      app_name: 'Zennest',
+      website_link: window.location.origin,
+      booking_link: `${window.location.origin}/booking/${bookingId}`,
+      current_year: new Date().getFullYear(),
+    };
+
+    // Send email to host
+    const hostTemplateParams = {
+      user_email: hostEmail,
+      user_name: hostName || hostEmail?.split('@')[0] || 'Host',
+      booking_id: bookingId || 'N/A',
+      listing_title: listingTitle || 'Listing',
+      listing_location: listingLocation || 'Location not specified',
+      check_in: checkIn ? formatDate(checkIn) : 'N/A',
+      check_out: checkOut ? formatDate(checkOut) : 'N/A',
+      guests: guests || 1,
+      nights: nights || 0,
+      total_amount: `₱${(totalAmount || 0).toLocaleString()}`,
+      category: category || 'booking',
+      guest_name: guestName || 'Guest',
+      app_name: 'Zennest',
+      website_link: window.location.origin,
+      booking_link: `${window.location.origin}/host/bookings`,
+      current_year: new Date().getFullYear(),
+    };
+
+    // Send to guest
+    if (guestEmail) {
+      try {
+        await emailjs.send(
+          config.serviceId,
+          config.bookingConfirmationTemplateId,
+          guestTemplateParams,
+          config.publicKey
+        );
+        console.log('✅ Booking confirmation email sent to guest:', guestEmail);
+      } catch (error) {
+        console.error('❌ Failed to send email to guest:', error);
+      }
+    }
+
+    // Send to host
+    if (hostEmail) {
+      try {
+        await emailjs.send(
+          config.serviceId,
+          config.bookingConfirmationTemplateId,
+          hostTemplateParams,
+          config.publicKey
+        );
+        console.log('✅ Booking confirmation email sent to host:', hostEmail);
+      } catch (error) {
+        console.error('❌ Failed to send email to host:', error);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending booking confirmation email:', error);
+    return { success: false, error: error.message || 'Failed to send email' };
+  }
+};
+
+// Send booking cancellation email
+export const sendBookingCancellationEmail = async (bookingData) => {
+  try {
+    // Use booking account (NEW ACCOUNT) for booking emails
+    const config = emailjsConfig.booking || {
+      publicKey: emailjsConfig.publicKey,
+      serviceId: emailjsConfig.serviceId,
+      bookingCancellationTemplateId: emailjsConfig.bookingCancellationTemplateId
+    };
+
+    if (!config.bookingCancellationTemplateId || config.bookingCancellationTemplateId.trim() === '') {
+      console.warn('⚠️ Booking cancellation template ID not configured. Skipping email.');
+      return { success: false, error: 'Email template not configured' };
+    }
+
+    // Initialize EmailJS with booking account public key
+    emailjs.init(config.publicKey);
+
+    const {
+      guestEmail,
+      guestName,
+      hostEmail,
+      hostName,
+      listingTitle,
+      listingLocation,
+      checkIn,
+      checkOut,
+      guests,
+      nights,
+      totalAmount,
+      bookingId,
+      category,
+      cancelledBy
+    } = bookingData;
+
+    // Format dates
+    const formatDate = (date) => {
+      if (!date) return 'N/A';
+      const dateObj = date instanceof Date ? date : new Date(date);
+      if (isNaN(dateObj.getTime())) return 'N/A';
+      return dateObj.toLocaleDateString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    // Send email to guest
+    const guestTemplateParams = {
+      user_email: guestEmail,
+      user_name: guestName || guestEmail?.split('@')[0] || 'Guest',
+      booking_id: bookingId || 'N/A',
+      listing_title: listingTitle || 'Listing',
+      listing_location: listingLocation || 'Location not specified',
+      check_in: checkIn ? formatDate(checkIn) : 'N/A',
+      check_out: checkOut ? formatDate(checkOut) : 'N/A',
+      guests: guests || 1,
+      nights: nights || 0,
+      total_amount: `₱${(totalAmount || 0).toLocaleString()}`,
+      category: category || 'booking',
+      host_name: hostName || 'Host',
+      cancelled_by: cancelledBy || 'You',
+      app_name: 'Zennest',
+      website_link: window.location.origin,
+      current_year: new Date().getFullYear(),
+    };
+
+    // Send email to host
+    const hostTemplateParams = {
+      user_email: hostEmail,
+      user_name: hostName || hostEmail?.split('@')[0] || 'Host',
+      booking_id: bookingId || 'N/A',
+      listing_title: listingTitle || 'Listing',
+      listing_location: listingLocation || 'Location not specified',
+      check_in: checkIn ? formatDate(checkIn) : 'N/A',
+      check_out: checkOut ? formatDate(checkOut) : 'N/A',
+      guests: guests || 1,
+      nights: nights || 0,
+      total_amount: `₱${(totalAmount || 0).toLocaleString()}`,
+      category: category || 'booking',
+      guest_name: guestName || 'Guest',
+      cancelled_by: cancelledBy || 'Guest',
+      app_name: 'Zennest',
+      website_link: window.location.origin,
+      current_year: new Date().getFullYear(),
+    };
+
+    // Send to guest
+    if (guestEmail) {
+      try {
+        await emailjs.send(
+          config.serviceId,
+          config.bookingCancellationTemplateId,
+          guestTemplateParams,
+          config.publicKey
+        );
+        console.log('✅ Booking cancellation email sent to guest:', guestEmail);
+      } catch (error) {
+        console.error('❌ Failed to send cancellation email to guest:', error);
+      }
+    }
+
+    // Send to host
+    if (hostEmail) {
+      try {
+        await emailjs.send(
+          config.serviceId,
+          config.bookingCancellationTemplateId,
+          hostTemplateParams,
+          config.publicKey
+        );
+        console.log('✅ Booking cancellation email sent to host:', hostEmail);
+      } catch (error) {
+        console.error('❌ Failed to send cancellation email to host:', error);
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error sending booking cancellation email:', error);
+    return { success: false, error: error.message || 'Failed to send email' };
+  }
+};
+
 // Initialize EmailJS
+// Note: EmailJS will be initialized per-request with the correct account
+// This function initializes the registration account by default (for backwards compatibility)
 export const initEmailJS = () => {
   try {
-    if (!emailjsConfig.publicKey) {
+    // Initialize with registration account (OLD ACCOUNT) by default
+    const config = emailjsConfig.registration || {
+      publicKey: emailjsConfig.publicKey
+    };
+
+    if (!config.publicKey) {
       console.error('❌ EmailJS public key is missing');
       return false;
     }
     
-    emailjs.init(emailjsConfig.publicKey);
-    console.log('✅ EmailJS initialized successfully');
+    emailjs.init(config.publicKey);
+    console.log('✅ EmailJS initialized successfully (Registration Account)');
     return true;
   } catch (error) {
     console.error('❌ EmailJS initialization failed:', error);

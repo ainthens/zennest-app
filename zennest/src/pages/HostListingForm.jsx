@@ -4,9 +4,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { createListing, updateListing } from '../services/firestoreService';
+import { createListing, updateListing, updateHostPoints, createCoupon, updateCoupon } from '../services/firestoreService';
 import { uploadImageToCloudinary } from '../config/cloudinary';
 import useAuth from '../hooks/useAuth';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   FaHome,
   FaStar,
@@ -18,8 +21,46 @@ import {
   FaTimes,
   FaChevronLeft,
   FaChevronRight,
-  FaCalendarAlt
+  FaCalendarAlt,
+  FaWifi,
+  FaParking,
+  FaSwimmingPool,
+  FaUtensils,
+  FaTv,
+  FaCar,
+  FaSnowflake,
+  FaHotTub,
+  FaDumbbell,
+  FaDog,
+  FaSmokingBan,
+  FaPlus,
+  FaTag,
+  FaCopy,
+  FaCheckCircle
 } from 'react-icons/fa';
+
+// Fix Leaflet default icon issue
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+// Component to handle map click events
+function LocationMarker({ position, setPosition }) {
+  useMapEvents({
+    click(e) {
+      setPosition([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+
+  return position === null ? null : (
+    <Marker position={position}>
+      <Popup>Listing Location</Popup>
+    </Marker>
+  );
+}
 
 const HostListingForm = () => {
   const { user } = useAuth();
@@ -56,12 +97,73 @@ const HostListingForm = () => {
   // Calendar state for availability management
   const [showAvailabilityCalendar, setShowAvailabilityCalendar] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  // Amenities management
+  const [newAmenity, setNewAmenity] = useState('');
+  const [showPromoCodeForm, setShowPromoCodeForm] = useState(false);
+  const [promoCodeData, setPromoCodeData] = useState({
+    code: '',
+    discount: '',
+    discountType: 'percentage',
+    validFrom: '',
+    validUntil: '',
+    maxUses: '',
+    minPurchase: ''
+  });
+  const [generatedPromoCodes, setGeneratedPromoCodes] = useState([]);
+  const [mapPosition, setMapPosition] = useState([14.5995, 120.9842]); // Default to Manila
+  const [mapZoom, setMapZoom] = useState(13);
+  
+  // Common amenities for quick selection
+  const commonAmenities = [
+    { name: 'WiFi', icon: FaWifi },
+    { name: 'Parking', icon: FaParking },
+    { name: 'TV', icon: FaTv },
+    { name: 'Kitchen', icon: FaUtensils },
+    { name: 'Pool', icon: FaSwimmingPool },
+    { name: 'Air Conditioning', icon: FaSnowflake },
+    { name: 'Hot Tub', icon: FaHotTub },
+    { name: 'Gym', icon: FaDumbbell },
+    { name: 'Pet Friendly', icon: FaDog },
+    { name: 'No Smoking', icon: FaSmokingBan },
+    { name: 'Car Rental', icon: FaCar }
+  ];
 
   useEffect(() => {
     if (isEdit && id) {
       fetchListing();
     }
   }, [id, isEdit]);
+
+  // Geocode location when it changes
+  useEffect(() => {
+    if (formData.location && formData.location.trim()) {
+      const geocodeLocation = async () => {
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.location)}&limit=1`
+          );
+          const data = await response.json();
+          
+          if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lon = parseFloat(data[0].lon);
+            setMapPosition([lat, lon]);
+            setMapZoom(13);
+          }
+        } catch (error) {
+          console.error('Error geocoding location:', error);
+        }
+      };
+
+      // Debounce geocoding
+      const timeoutId = setTimeout(() => {
+        geocodeLocation();
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formData.location]);
 
   // Auto-hide error notification after 5 seconds with progress animation
   useEffect(() => {
@@ -327,6 +429,95 @@ const HostListingForm = () => {
     }));
   };
 
+  const addAmenity = (amenityName) => {
+    if (!amenityName || !amenityName.trim()) return;
+    const trimmed = amenityName.trim();
+    if (!formData.amenities.includes(trimmed)) {
+      setFormData(prev => ({
+        ...prev,
+        amenities: [...prev.amenities, trimmed]
+      }));
+    }
+    setNewAmenity('');
+  };
+
+  const removeAmenity = (amenityName) => {
+    setFormData(prev => ({
+      ...prev,
+      amenities: prev.amenities.filter(a => a !== amenityName)
+    }));
+  };
+
+  const generatePromoCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  const handleGeneratePromoCode = () => {
+    const code = generatePromoCode();
+    setPromoCodeData(prev => ({ ...prev, code }));
+  };
+
+  const handleCreatePromoCode = async () => {
+    if (!promoCodeData.code || !promoCodeData.code.trim()) {
+      setError('Please generate or enter a promo code');
+      return;
+    }
+    if (!promoCodeData.discount || parseFloat(promoCodeData.discount) <= 0) {
+      setError('Please enter a valid discount amount');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const couponData = {
+        hostId: user.uid,
+        code: promoCodeData.code.toUpperCase().trim(),
+        discount: parseFloat(promoCodeData.discount),
+        discountType: promoCodeData.discountType,
+        validFrom: promoCodeData.validFrom ? new Date(promoCodeData.validFrom) : new Date(),
+        validUntil: promoCodeData.validUntil ? new Date(promoCodeData.validUntil) : null,
+        maxUses: promoCodeData.maxUses ? parseInt(promoCodeData.maxUses) : null,
+        minPurchase: parseFloat(promoCodeData.minPurchase) || 0,
+        listingId: isEdit ? id : null // Link to listing if editing
+      };
+
+      const result = await createCoupon(couponData);
+      if (result.success) {
+        setGeneratedPromoCodes(prev => [...prev, {
+          ...couponData,
+          id: result.id,
+          createdAt: new Date()
+        }]);
+        setPromoCodeData({
+          code: '',
+          discount: '',
+          discountType: 'percentage',
+          validFrom: '',
+          validUntil: '',
+          maxUses: '',
+          minPurchase: ''
+        });
+        setShowPromoCodeForm(false);
+        setSuccess('Promo code created successfully!');
+      }
+    } catch (error) {
+      console.error('Error creating promo code:', error);
+      setError('Failed to create promo code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyPromoCode = (code) => {
+    navigator.clipboard.writeText(code);
+    setSuccess(`Promo code "${code}" copied to clipboard!`);
+  };
+
   const handleSubmit = async (e, publish = false) => {
     e.preventDefault();
     setLoading(true);
@@ -340,14 +531,9 @@ const HostListingForm = () => {
       return;
     }
 
-    // Validation
+    // Basic validation (always required)
     if (!formData.title.trim()) {
       setError('Please enter a title for your listing');
-      setLoading(false);
-      return;
-    }
-    if (!formData.description.trim()) {
-      setError('Please enter a description for your listing');
       setLoading(false);
       return;
     }
@@ -356,10 +542,49 @@ const HostListingForm = () => {
       setLoading(false);
       return;
     }
-    if (!formData.rate || parseFloat(formData.rate) <= 0) {
-      setError('Please enter a valid rate per night');
-      setLoading(false);
-      return;
+
+    // Additional validation only required when publishing
+    if (publish) {
+      if (!formData.rate || parseFloat(formData.rate) <= 0) {
+        const rateLabel = formData.category === 'home' 
+          ? 'rate per night' 
+          : formData.category === 'service'
+          ? 'price'
+          : 'price per person';
+        setError(`Please enter a valid ${rateLabel}`);
+        setLoading(false);
+        return;
+      }
+      if (!formData.description.trim()) {
+        setError('Please enter a description for your listing');
+        setLoading(false);
+        return;
+      }
+      // For home category, validate bedrooms, bathrooms, and guests
+      if (formData.category === 'home') {
+        if (!formData.bedrooms || parseInt(formData.bedrooms) <= 0) {
+          setError('Please enter the number of bedrooms');
+          setLoading(false);
+          return;
+        }
+        if (!formData.bathrooms || parseFloat(formData.bathrooms) <= 0) {
+          setError('Please enter the number of bathrooms');
+          setLoading(false);
+          return;
+        }
+        if (!formData.guests || parseInt(formData.guests) <= 0) {
+          setError('Please enter the maximum number of guests');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // For experience and service, validate guests
+        if (!formData.guests || parseInt(formData.guests) <= 0) {
+          setError(`Please enter the maximum ${formData.category === 'experience' ? 'participants' : 'capacity'}`);
+          setLoading(false);
+          return;
+        }
+      }
     }
 
     try {
@@ -392,8 +617,14 @@ const HostListingForm = () => {
       console.log('User ID:', user.uid);
 
       let result;
+      let wasDraftToPublished = false;
+      
       if (isEdit) {
         console.log('Updating listing:', id);
+        // Check if listing was previously a draft and is now being published
+        if (originalData && originalData.status === 'draft' && publish) {
+          wasDraftToPublished = true;
+        }
         result = await updateListing(id, listingData);
         console.log('Update result:', result);
         if (!result || !result.success) {
@@ -407,7 +638,33 @@ const HostListingForm = () => {
         if (!result || !result.success) {
           throw new Error(result?.error || 'Creation failed - no success response');
         }
+        wasDraftToPublished = publish; // New listing being published
         setSuccess(publish ? 'Listing created and published successfully!' : 'Listing saved as draft!');
+      }
+
+      // Award points for publishing a listing (only if newly published, not if already published)
+      if (publish && wasDraftToPublished) {
+        try {
+          await updateHostPoints(user.uid, 50, 'Published a listing');
+          console.log('✅ Points awarded for publishing listing');
+        } catch (pointsError) {
+          console.error('Error awarding points:', pointsError);
+          // Don't fail the listing save if points fail
+        }
+      }
+
+      // Link any promo codes created during this session to the listing
+      if (generatedPromoCodes.length > 0 && result.id) {
+        try {
+          const linkPromises = generatedPromoCodes
+            .filter(promo => promo.id && !promo.listingId)
+            .map(promo => updateCoupon(promo.id, { listingId: result.id }));
+          await Promise.all(linkPromises);
+          console.log('✅ Linked promo codes to listing');
+        } catch (linkError) {
+          console.error('Error linking promo codes to listing:', linkError);
+          // Don't fail the listing save if linking fails
+        }
       }
 
       // Log for debugging
@@ -554,12 +811,12 @@ const HostListingForm = () => {
           onClick={() => !isPast && toggleDateAvailability(date)}
           disabled={isPast}
           className={`
-            aspect-square p-2 text-sm font-medium rounded-lg transition-all relative
+            aspect-square p-1 text-xs font-medium rounded transition-all relative
             ${isPast 
               ? 'text-gray-300 cursor-not-allowed bg-gray-50' 
               : isUnavailable
-              ? 'bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer border-2 border-red-400'
-              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer border-2 border-transparent hover:border-emerald-300'
+              ? 'bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer border border-red-400'
+              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer border border-transparent hover:border-emerald-300'
             }
           `}
           title={isPast ? 'Cannot select past dates' : isUnavailable ? 'Click to make available' : 'Click to mark unavailable'}
@@ -567,7 +824,7 @@ const HostListingForm = () => {
           {day}
           {isUnavailable && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <FaTimes className="w-3 h-3 text-red-600" />
+              <FaTimes className="w-2 h-2 text-red-600" />
             </div>
           )}
         </button>
@@ -575,73 +832,73 @@ const HostListingForm = () => {
     }
 
     return (
-      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-xl p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-lg p-4 max-w-md">
+        <div className="flex items-center justify-between mb-4">
           <button
             type="button"
             onClick={prevMonth}
             disabled={currentMonth <= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="p-1.5 hover:bg-gray-100 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <FaChevronLeft className="w-5 h-5 text-gray-700" />
+            <FaChevronLeft className="w-4 h-4 text-gray-700" />
           </button>
-          <h3 className="text-lg font-bold text-gray-900">
+          <h3 className="text-sm font-bold text-gray-900">
             {monthNames[month]} {year}
           </h3>
           <button
             type="button"
             onClick={nextMonth}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-gray-100 rounded transition-colors"
           >
-            <FaChevronRight className="w-5 h-5 text-gray-700" />
+            <FaChevronRight className="w-4 h-4 text-gray-700" />
           </button>
         </div>
 
         {/* Day labels */}
-        <div className="grid grid-cols-7 gap-2 mb-3">
+        <div className="grid grid-cols-7 gap-1 mb-2">
           {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-            <div key={day} className="text-center text-xs font-bold text-gray-500 uppercase">
+            <div key={day} className="text-center text-[10px] font-semibold text-gray-500 uppercase">
               {day}
             </div>
           ))}
         </div>
 
         {/* Calendar days */}
-        <div className="grid grid-cols-7 gap-2 mb-4">
+        <div className="grid grid-cols-7 gap-1 mb-3">
           {days}
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap gap-4 pt-4 border-t border-gray-200 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-emerald-50 border-2 border-emerald-300" />
+        <div className="flex flex-wrap gap-3 pt-3 border-t border-gray-200 text-[10px]">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-emerald-50 border border-emerald-300" />
             <span className="text-gray-600">Available</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-red-100 border-2 border-red-400 relative">
-              <FaTimes className="w-2 h-2 text-red-600 absolute inset-0 m-auto" />
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-red-100 border border-red-400 relative">
+              <FaTimes className="w-1.5 h-1.5 text-red-600 absolute inset-0 m-auto" />
             </div>
             <span className="text-gray-600">Unavailable</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gray-50" />
-            <span className="text-gray-600">Past dates</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-gray-50" />
+            <span className="text-gray-600">Past</span>
           </div>
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-3 pt-4 border-t border-gray-200 mt-4">
+        <div className="flex gap-2 pt-3 border-t border-gray-200 mt-3">
           <button
             type="button"
             onClick={() => setFormData(prev => ({ ...prev, unavailableDates: [] }))}
-            className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+            className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-xs font-medium"
           >
             Clear All
           </button>
           <button
             type="button"
             onClick={() => setShowAvailabilityCalendar(false)}
-            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-semibold"
+            className="flex-1 px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors text-xs font-medium"
           >
             Done
           </button>
@@ -890,22 +1147,21 @@ const HostListingForm = () => {
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
-          {/* Google Maps Preview */}
+          {/* Leaflet Map Preview */}
           {formData.location && formData.location.trim() && (
-            <div className="mt-4 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-              <div className="relative w-full h-64 bg-gray-100">
-                <iframe
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  allowFullScreen
-                  referrerPolicy="no-referrer-when-downgrade"
-                  src={`https://www.google.com/maps?q=${encodeURIComponent(formData.location)}&output=embed`}
-                  title="Location preview"
-                  className="w-full h-full"
+            <div className="mt-4 rounded-lg overflow-hidden border border-gray-200 shadow-sm" style={{ height: '256px', zIndex: 0 }}>
+              <MapContainer
+                center={mapPosition}
+                zoom={mapZoom}
+                style={{ height: '100%', width: '100%' }}
+                scrollWheelZoom={true}
+              >
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-              </div>
+                <LocationMarker position={mapPosition} setPosition={setMapPosition} />
+              </MapContainer>
             </div>
           )}
         </div>
@@ -913,13 +1169,12 @@ const HostListingForm = () => {
         {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description *
+            Description <span className="text-xs text-gray-500 font-normal">(Required for publishing)</span>
           </label>
           <textarea
             name="description"
             value={formData.description}
             onChange={handleChange}
-            required
             rows={6}
             placeholder="Describe your listing in detail..."
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
@@ -931,7 +1186,7 @@ const HostListingForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bedrooms
+                Bedrooms <span className="text-xs text-gray-500 font-normal">(Required for publishing)</span>
               </label>
               <input
                 type="number"
@@ -966,7 +1221,7 @@ const HostListingForm = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Bathrooms
+                Bathrooms <span className="text-xs text-gray-500 font-normal">(Required for publishing)</span>
               </label>
               <input
                 type="number"
@@ -981,7 +1236,7 @@ const HostListingForm = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Guests
+                Max Guests <span className="text-xs text-gray-500 font-normal">(Required for publishing)</span>
               </label>
               <input
                 type="number"
@@ -1039,10 +1294,11 @@ const HostListingForm = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {formData.category === 'home' 
-                ? 'Rate per Night (₱) *'
+                ? 'Rate per Night (₱)'
                 : formData.category === 'service'
-                ? 'Price (₱) *'
-                : 'Price per Person (₱) *'}
+                ? 'Price (₱)'
+                : 'Price per Person (₱)'}
+              <span className="text-xs text-gray-500 font-normal ml-1">(Required for publishing)</span>
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">₱</span>
@@ -1051,7 +1307,6 @@ const HostListingForm = () => {
                 name="rate"
                 value={formData.rate}
                 onChange={handleChange}
-                required
                 min="0"
                 step="0.01"
                 placeholder="0.00"
@@ -1150,6 +1405,313 @@ const HostListingForm = () => {
           </div>
         </div>
 
+        {/* Amenities Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            What this place offers
+            <span className="text-xs text-gray-500 ml-2">(Add amenities and features)</span>
+          </label>
+          
+          {/* Common Amenities Quick Select */}
+          <div className="mb-4">
+            <p className="text-xs text-gray-600 mb-2 font-medium">Quick Add:</p>
+            <div className="flex flex-wrap gap-2">
+              {commonAmenities.map((amenity) => {
+                const Icon = amenity.icon;
+                const isSelected = formData.amenities.includes(amenity.name);
+                return (
+                  <button
+                    key={amenity.name}
+                    type="button"
+                    onClick={() => {
+                      if (isSelected) {
+                        removeAmenity(amenity.name);
+                      } else {
+                        addAmenity(amenity.name);
+                      }
+                    }}
+                    className={`
+                      flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm
+                      ${isSelected
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:border-emerald-400 hover:bg-emerald-50'
+                      }
+                    `}
+                  >
+                    <Icon className={isSelected ? 'text-emerald-600' : 'text-gray-500'} />
+                    <span>{amenity.name}</span>
+                    {isSelected && <FaCheckCircle className="text-emerald-600 text-xs" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Custom Amenity Input */}
+          <div className="flex gap-2 mb-4">
+            <input
+              type="text"
+              value={newAmenity}
+              onChange={(e) => setNewAmenity(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addAmenity(newAmenity);
+                }
+              }}
+              placeholder="Add custom amenity (e.g., Beach Access, Fireplace)"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+            <button
+              type="button"
+              onClick={() => addAmenity(newAmenity)}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
+            >
+              <FaPlus />
+              Add
+            </button>
+          </div>
+
+          {/* Selected Amenities Display */}
+          {formData.amenities.length > 0 && (
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs text-gray-600 mb-2 font-semibold">
+                Selected Amenities ({formData.amenities.length}):
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {formData.amenities.map((amenity) => (
+                  <span
+                    key={amenity}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700"
+                  >
+                    {amenity}
+                    <button
+                      type="button"
+                      onClick={() => removeAmenity(amenity)}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <FaTimes className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Promo Code Generation Section */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Promo Codes
+              <span className="text-xs text-gray-500 ml-2">(Create discount codes for guests)</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowPromoCodeForm(!showPromoCodeForm)}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm"
+            >
+              <FaTag />
+              {showPromoCodeForm ? 'Cancel' : 'Create Promo Code'}
+            </button>
+          </div>
+
+          {/* Promo Code Form */}
+          <AnimatePresence>
+            {showPromoCodeForm && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200 space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Promo Code *
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoCodeData.code}
+                        onChange={(e) => setPromoCodeData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                        placeholder="Enter or generate code"
+                        maxLength={20}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent uppercase"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleGeneratePromoCode}
+                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm whitespace-nowrap"
+                      >
+                        Generate
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Discount Type *
+                    </label>
+                    <select
+                      value={promoCodeData.discountType}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, discountType: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    >
+                      <option value="percentage">Percentage (%)</option>
+                      <option value="fixed">Fixed Amount (₱)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Discount {promoCodeData.discountType === 'percentage' ? '(%)' : '(₱)'} *
+                    </label>
+                    <input
+                      type="number"
+                      value={promoCodeData.discount}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, discount: e.target.value }))}
+                      min="0"
+                      max={promoCodeData.discountType === 'percentage' ? '100' : undefined}
+                      step={promoCodeData.discountType === 'percentage' ? '1' : '0.01'}
+                      placeholder="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Minimum Purchase (₱)
+                    </label>
+                    <input
+                      type="number"
+                      value={promoCodeData.minPurchase}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, minPurchase: e.target.value }))}
+                      min="0"
+                      step="0.01"
+                      placeholder="0 (no minimum)"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Valid From
+                    </label>
+                    <input
+                      type="date"
+                      value={promoCodeData.validFrom}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, validFrom: e.target.value }))}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Valid Until
+                    </label>
+                    <input
+                      type="date"
+                      value={promoCodeData.validUntil}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, validUntil: e.target.value }))}
+                      min={promoCodeData.validFrom || new Date().toISOString().split('T')[0]}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Max Uses
+                    </label>
+                    <input
+                      type="number"
+                      value={promoCodeData.maxUses}
+                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, maxUses: e.target.value }))}
+                      min="1"
+                      placeholder="Unlimited"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">Leave empty for unlimited uses</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleCreatePromoCode}
+                    disabled={loading}
+                    className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loading ? 'Creating...' : 'Create Promo Code'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPromoCodeForm(false);
+                      setPromoCodeData({
+                        code: '',
+                        discount: '',
+                        discountType: 'percentage',
+                        validFrom: '',
+                        validUntil: '',
+                        maxUses: '',
+                        minPurchase: ''
+                      });
+                    }}
+                    className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Generated Promo Codes Display */}
+          {generatedPromoCodes.length > 0 && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-xs text-gray-600 mb-3 font-semibold">
+                Created Promo Codes ({generatedPromoCodes.length}):
+              </p>
+              <div className="space-y-2">
+                {generatedPromoCodes.map((promo) => (
+                  <div
+                    key={promo.id || promo.code}
+                    className="flex items-center justify-between p-3 bg-white border border-gray-300 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-mono font-semibold text-emerald-700">{promo.code}</span>
+                        <span className="text-sm text-gray-600">
+                          - {promo.discount}{promo.discountType === 'percentage' ? '%' : '₱'} off
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {promo.validFrom && (
+                          <span>Valid: {new Date(promo.validFrom).toLocaleDateString()}</span>
+                        )}
+                        {promo.validUntil && (
+                          <span> - {new Date(promo.validUntil).toLocaleDateString()}</span>
+                        )}
+                        {promo.maxUses && <span> · Max {promo.maxUses} uses</span>}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => copyPromoCode(promo.code)}
+                      className="ml-4 p-2 text-gray-400 hover:text-emerald-600 transition-colors"
+                      title="Copy code"
+                    >
+                      <FaCopy className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Availability Calendar - Only for home listings */}
         {formData.category === 'home' && (
           <div>
@@ -1188,7 +1750,7 @@ const HostListingForm = () => {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="absolute top-full left-0 right-0 mt-2 z-50"
+                    className="absolute top-full left-0 mt-2 z-50"
                   >
                     {renderAvailabilityCalendar()}
                   </motion.div>

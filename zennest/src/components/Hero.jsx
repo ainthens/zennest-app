@@ -5,7 +5,6 @@ import waveSvg from "../assets/wave (1).svg";
 import { FaSearch, FaCalendarAlt } from "react-icons/fa";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { Listbox } from "@headlessui/react";
 import LightRays from "./LightRays";
 import BlurText from "./BlurText";
 
@@ -18,9 +17,8 @@ const Hero = () => {
   const navigate = useNavigate();
   const [checkIn, setCheckIn] = useState(null);
   const [checkOut, setCheckOut] = useState(null);
-
-  const guestOptions = ["1 Guest", "2 Guests", "3 Guests", "4+ Guests"];
-  const [selectedGuest, setSelectedGuest] = useState(guestOptions[0]);
+  const [location, setLocation] = useState('');
+  const [guests, setGuests] = useState(1);
 
   const [mounted, setMounted] = useState(false);
   const [videoError, setVideoError] = useState(null);
@@ -122,12 +120,23 @@ const Hero = () => {
           value={value}
           placeholder={placeholder}
           readOnly
-          className="w-full p-3 rounded-lg bg-white text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 cursor-pointer placeholder-gray-400"
+          className="w-full p-3 rounded-lg bg-white text-gray-800 text-sm border-2 border-gray-300 hover:border-emerald-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 cursor-pointer placeholder-gray-400 transition-colors"
         />
         <FaCalendarAlt className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm pointer-events-none" />
       </div>
     )
   );
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (location.trim()) params.set('location', location.trim());
+    if (checkIn) params.set('checkIn', checkIn.toISOString().split('T')[0]);
+    if (checkOut) params.set('checkOut', checkOut.toISOString().split('T')[0]);
+    if (guests > 1) params.set('guests', guests.toString());
+    
+    navigate(`/homestays${params.toString() ? `?${params.toString()}` : ''}`);
+  };
 
 
   // Generate poster image (thumbnail from first frame) for better loading experience
@@ -306,7 +315,7 @@ const Hero = () => {
         >
           <span className="absolute top-0 left-[-50%] h-full w-1/2 pointer-events-none shine"></span>
           <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Plan your journey</h2>
-          <form className="space-y-3 sm:space-y-4">
+          <form onSubmit={handleSearch} className="space-y-3 sm:space-y-4">
             {/* Where */}
             <div>
               <label htmlFor="where" className="block text-xs font-medium text-white mb-1.5">
@@ -315,8 +324,10 @@ const Hero = () => {
               <input
                 type="text"
                 id="where"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g. Palawan, Siargao"
-                className="w-full p-3 rounded-lg bg-white text-gray-800 focus:ring-2 focus:ring-emerald-500 text-sm placeholder-gray-400"
+                className="w-full p-3 rounded-lg bg-white text-gray-800 border-2 border-gray-300 hover:border-emerald-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500 text-sm placeholder-gray-400 transition-colors"
               />
             </div>
 
@@ -328,10 +339,15 @@ const Hero = () => {
               <DatePicker
                 selected={checkIn}
                 onChange={(date) => setCheckIn(date)}
+                selectsStart
+                startDate={checkIn}
+                endDate={checkOut}
+                minDate={new Date()}
                 dateFormat="dd/MM/yyyy"
                 placeholderText="Select date"
                 customInput={<CustomDateInput className="w-full" />}
                 wrapperClassName="w-full"
+                popperClassName="z-50"
               />
             </div>
 
@@ -343,10 +359,15 @@ const Hero = () => {
               <DatePicker
                 selected={checkOut}
                 onChange={(date) => setCheckOut(date)}
+                selectsEnd
+                startDate={checkIn}
+                endDate={checkOut}
+                minDate={checkIn || new Date()}
                 dateFormat="dd/MM/yyyy"
                 placeholderText="Select date"
                 customInput={<CustomDateInput className="w-full" />}
                 wrapperClassName="w-full"
+                popperClassName="z-50"
               />
             </div>
 
@@ -355,24 +376,25 @@ const Hero = () => {
               <label htmlFor="guests" className="block text-xs font-medium text-white mb-1.5">
                 Who (Guests)
               </label>
-              <Listbox value={selectedGuest} onChange={setSelectedGuest}>
-                <div className="relative">
-                  <Listbox.Button className="w-full p-3 rounded-lg bg-white text-gray-800 text-sm text-left focus:ring-2 focus:ring-emerald-500 focus:outline-none">
-                    {selectedGuest}
-                  </Listbox.Button>
-                  <Listbox.Options className="absolute mt-1 w-full bg-white rounded-lg shadow-xl max-h-60 overflow-auto z-50 border border-gray-200">
-                    {guestOptions.map((guest, idx) => (
-                      <Listbox.Option
-                        key={idx}
-                        value={guest}
-                        className="cursor-pointer select-none p-3 text-sm text-gray-700 hover:bg-emerald-50 active:bg-emerald-100 transition-colors"
-                      >
-                        {guest}
-                      </Listbox.Option>
-                    ))}
-                  </Listbox.Options>
+              <div className="border-2 border-gray-300 rounded-lg bg-white hover:border-emerald-500 focus-within:border-emerald-500 transition-colors">
+                <div className="flex items-center justify-between p-3">
+                  <button
+                    type="button"
+                    onClick={() => setGuests(Math.max(1, guests - 1))}
+                    className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-emerald-500 text-gray-700 font-semibold flex items-center justify-center transition-colors"
+                  >
+                    −
+                  </button>
+                  <span className="text-sm font-semibold text-gray-900">{guests} {guests === 1 ? 'guest' : 'guests'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setGuests(guests + 1)}
+                    className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-emerald-500 text-gray-700 font-semibold flex items-center justify-center transition-colors"
+                  >
+                    +
+                  </button>
                 </div>
-              </Listbox>
+              </div>
             </div>
 
             {/* Search Button */}

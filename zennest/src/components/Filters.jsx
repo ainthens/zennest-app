@@ -24,7 +24,8 @@ const Filters = ({
   filteredCount,
   totalCount,
   searchPlaceholder,
-  itemLabel = "home stays"
+  itemLabel = "home stays",
+  hideSearch = false
 }) => {
   // Determine if using HomeStays mode or Experiences/Services mode
   const isHomeStaysMode = filters !== undefined && setFilters !== undefined;
@@ -69,26 +70,28 @@ const Filters = ({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 w-full">
       {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder={isHomeStaysMode ? "Search location..." : (searchPlaceholder || "Search...")}
-            value={isHomeStaysMode ? (filters?.location || "") : (searchQuery || "")}
-            onChange={(e) => {
-              if (isHomeStaysMode) {
-                setFilters({ ...filters, location: e.target.value });
-              } else {
-                setSearchQuery(e.target.value);
-              }
-            }}
-            className="w-full px-4 py-3 pl-12 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
-          />
-          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+      {!hideSearch && (
+        <div className="mb-6">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder={isHomeStaysMode ? "Search location..." : (searchPlaceholder || "Search...")}
+              value={isHomeStaysMode ? (filters?.location || "") : (searchQuery || "")}
+              onChange={(e) => {
+                if (isHomeStaysMode) {
+                  setFilters({ ...filters, location: e.target.value });
+                } else {
+                  setSearchQuery(e.target.value);
+                }
+              }}
+              className="w-full px-4 py-3 pl-12 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200"
+            />
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter Row */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 ${isHomeStaysMode && categories && priceRangeOptions && sortOptions ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>

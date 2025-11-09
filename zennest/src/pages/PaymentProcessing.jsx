@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { validatePromoCode, updateCoupon, transferPaymentToHost, getHostProfile } from '../services/firestoreService';
+import { sendBookingConfirmationEmail } from '../services/emailService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
 import Loading from '../components/Loading';
@@ -22,7 +24,9 @@ import {
   FaShieldAlt,
   FaLock,
   FaTimes,
-  FaInfoCircle
+  FaInfoCircle,
+  FaTag,
+  FaCheck
 } from 'react-icons/fa';
 
 const PaymentProcessing = () => {
@@ -70,6 +74,13 @@ const PaymentProcessing = () => {
   
   // Step 3: Message to host
   const [messageToHost, setMessageToHost] = useState('');
+  
+  // Promo code
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromoCode, setAppliedPromoCode] = useState(null);
+  const [promoCodeError, setPromoCodeError] = useState('');
+  const [validatingPromoCode, setValidatingPromoCode] = useState(false);
+  const [promoDiscount, setPromoDiscount] = useState(0);
   
   // Step 4: Review (calculated values)
   const [totalAmount, setTotalAmount] = useState(0);
@@ -186,7 +197,7 @@ const PaymentProcessing = () => {
     }
   };
 
-  const calculateTotals = (data, listingData = null) => {
+  const calculateTotals = (data, listingData = null, promoDiscountAmount = 0) => {
     const listingToUse = listingData || listing;
     if (!listingToUse) return;
     
@@ -202,15 +213,104 @@ const PaymentProcessing = () => {
       subtotal = baseRate * (data.guests || 1);
     }
     
-    const fee = Math.round(subtotal * 0.05);
-    const total = subtotal + fee;
+    // Apply promo code discount
+    const subtotalAfterPromo = Math.max(0, subtotal - promoDiscountAmount);
+    
+    const fee = Math.round(subtotalAfterPromo * 0.05);
+    const total = subtotalAfterPromo + fee;
     
     setTotalAmount(subtotal);
     setServiceFee(fee);
     setFinalTotal(total);
+    setPromoDiscount(promoDiscountAmount);
   };
 
-  const handleNext = () => {
+  const handleApplyPromoCode = async () => {
+    if (!promoCode.trim()) {
+      setPromoCodeError('Please enter a promo code');
+      return;
+    }
+
+    if (!listing || !user?.uid) {
+      setPromoCodeError('Unable to validate promo code');
+      return;
+    }
+
+    setValidatingPromoCode(true);
+    setPromoCodeError('');
+
+    try {
+      const currentBookingData = bookingData || (() => {
+        try {
+          const stored = sessionStorage.getItem('bookingData');
+          return stored ? JSON.parse(stored) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!currentBookingData) {
+        setPromoCodeError('Booking data not found');
+        setValidatingPromoCode(false);
+        return;
+      }
+
+      // Calculate current subtotal
+      const baseRate = listing.discount > 0 
+        ? (listing.rate || 0) * (1 - listing.discount / 100)
+        : (listing.rate || 0);
+      
+      let subtotal = 0;
+      if (listing.category === 'home') {
+        const nights = currentBookingData.nights || 0;
+        subtotal = nights > 0 ? baseRate * nights * (currentBookingData.guests || 1) : baseRate;
+      } else {
+        subtotal = baseRate * (currentBookingData.guests || 1);
+      }
+
+      const result = await validatePromoCode(
+        promoCode.trim(),
+        listing.id,
+        listing.hostId,
+        subtotal
+      );
+
+      if (result.success) {
+        setAppliedPromoCode(result.coupon);
+        setPromoCodeError('');
+        calculateTotals(currentBookingData, listing, result.discountAmount);
+      } else {
+        setPromoCodeError(result.error || 'Invalid promo code');
+        setAppliedPromoCode(null);
+        calculateTotals(currentBookingData, listing, 0);
+      }
+    } catch (error) {
+      console.error('Error validating promo code:', error);
+      setPromoCodeError('Failed to validate promo code. Please try again.');
+      setAppliedPromoCode(null);
+    } finally {
+      setValidatingPromoCode(false);
+    }
+  };
+
+  const handleRemovePromoCode = () => {
+    setPromoCode('');
+    setAppliedPromoCode(null);
+    setPromoCodeError('');
+    const currentBookingData = bookingData || (() => {
+      try {
+        const stored = sessionStorage.getItem('bookingData');
+        return stored ? JSON.parse(stored) : null;
+      } catch {
+        return null;
+      }
+    })();
+    if (currentBookingData && listing) {
+      calculateTotals(currentBookingData, listing, 0);
+    }
+  };
+
+  const handleNext = async () => {
     if (currentStep === 1) {
       setCurrentStep(2);
     } else if (currentStep === 2) {
@@ -222,6 +322,20 @@ const PaymentProcessing = () => {
       if (paymentMethod === 'wallet' && walletBalance < finalTotal) {
         alert('Insufficient wallet balance. Please top up your wallet or use PayPal.');
         return;
+      }
+      // Recalculate totals when moving to next step to ensure promo code is still valid
+      if (appliedPromoCode) {
+        const currentBookingData = bookingData || (() => {
+          try {
+            const stored = sessionStorage.getItem('bookingData');
+            return stored ? JSON.parse(stored) : null;
+          } catch {
+            return null;
+          }
+        })();
+        if (currentBookingData && listing) {
+          await handleApplyPromoCode();
+        }
       }
       setCurrentStep(3);
     } else if (currentStep === 3) {
@@ -262,6 +376,9 @@ const PaymentProcessing = () => {
       guests: finalBookingData.guests || 1,
       nights: finalBookingData.nights || 0,
       subtotal: totalAmount,
+      promoCode: appliedPromoCode?.code || null,
+      promoCodeId: appliedPromoCode?.id || null,
+      promoDiscount: promoDiscount,
       serviceFee: serviceFee,
       total: finalTotal,
       messageToHost: messageToHost.trim() || null,
@@ -321,6 +438,17 @@ const PaymentProcessing = () => {
         updatedAt: serverTimestamp()
       });
 
+      // Update promo code usage if applied
+      if (appliedPromoCode && appliedPromoCode.id) {
+        try {
+          await updateCoupon(appliedPromoCode.id, {
+            usageCount: (appliedPromoCode.usageCount || 0) + 1
+          });
+        } catch (error) {
+          console.error('Error updating promo code usage:', error);
+        }
+      }
+
       // Create transaction record
       const transactionsRef = collection(db, 'transactions');
       await addDoc(transactionsRef, {
@@ -334,6 +462,19 @@ const PaymentProcessing = () => {
         paypalPaymentId: paymentId,
         createdAt: serverTimestamp()
       });
+
+      // Transfer payment to host (subtract service fee)
+      const hostAmount = totalAmount - promoDiscount; // Host receives subtotal minus promo discount
+      try {
+        await transferPaymentToHost(listing.hostId, hostAmount, pendingBookingId, listing.title);
+        console.log('✅ Payment transferred to host');
+      } catch (transferError) {
+        console.error('❌ Error transferring payment to host:', transferError);
+        // Don't block the flow if transfer fails - can be handled manually
+      }
+
+      // Send booking confirmation emails
+      await sendBookingConfirmationEmails(pendingBookingId);
 
       // Send message to host if provided
       await sendMessageToHost(pendingBookingId);
@@ -409,6 +550,66 @@ const PaymentProcessing = () => {
     }
   };
 
+  // Send booking confirmation emails to guest and host
+  const sendBookingConfirmationEmails = async (bookingId) => {
+    try {
+      const finalBookingData = currentBookingData || bookingData;
+      
+      // Get booking details
+      const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      if (!bookingSnap.exists()) return;
+
+      const booking = bookingSnap.data();
+
+      // Get guest email (from Firebase Auth user)
+      const guestEmail = user?.email || '';
+      const guestName = user?.displayName || user?.email?.split('@')[0] || 'Guest';
+
+      // Get host email and name
+      let hostEmail = '';
+      let hostName = '';
+      try {
+        const hostResult = await getHostProfile(listing.hostId);
+        if (hostResult.success && hostResult.data) {
+          const hostData = hostResult.data;
+          hostEmail = hostData.email || '';
+          hostName = hostData.firstName && hostData.lastName 
+            ? `${hostData.firstName} ${hostData.lastName}` 
+            : hostData.firstName || hostData.email?.split('@')[0] || 'Host';
+        }
+      } catch (error) {
+        console.error('Error fetching host profile for email:', error);
+      }
+
+      // Prepare email data
+      const emailData = {
+        guestEmail,
+        guestName,
+        hostEmail,
+        hostName,
+        listingTitle: listing.title || 'Listing',
+        listingLocation: listing.location || 'Location not specified',
+        checkIn: finalBookingData.checkIn ? new Date(finalBookingData.checkIn) : null,
+        checkOut: finalBookingData.checkOut ? new Date(finalBookingData.checkOut) : null,
+        guests: finalBookingData.guests || 1,
+        nights: finalBookingData.nights || 0,
+        totalAmount: finalTotal,
+        bookingId: bookingId,
+        category: listing.category || 'booking'
+      };
+
+      // Send emails (non-blocking)
+      sendBookingConfirmationEmail(emailData).catch(error => {
+        console.error('Error sending booking confirmation email:', error);
+        // Don't block the flow if email fails
+      });
+    } catch (error) {
+      console.error('Error preparing booking confirmation emails:', error);
+      // Don't block the flow if email fails
+    }
+  };
+
   const handleCompleteBooking = async () => {
     const finalBookingData = currentBookingData || bookingData;
     
@@ -449,6 +650,33 @@ const PaymentProcessing = () => {
       // Process payment if paying now
       if (paymentTiming === 'now' && paymentMethod === 'wallet') {
         await completeWalletPayment(bookingId);
+
+        // Transfer payment to host (subtract service fee)
+        const hostAmount = totalAmount - promoDiscount; // Host receives subtotal minus promo discount
+        try {
+          await transferPaymentToHost(listing.hostId, hostAmount, bookingId, listing.title);
+          console.log('✅ Payment transferred to host');
+        } catch (transferError) {
+          console.error('❌ Error transferring payment to host:', transferError);
+          // Don't block the flow if transfer fails - can be handled manually
+        }
+      }
+
+      // Update promo code usage if applied
+      if (appliedPromoCode && appliedPromoCode.id) {
+        try {
+          await updateCoupon(appliedPromoCode.id, {
+            usageCount: (appliedPromoCode.usageCount || 0) + 1
+          });
+        } catch (error) {
+          console.error('Error updating promo code usage:', error);
+          // Don't fail the booking if promo code update fails
+        }
+      }
+
+      // Send booking confirmation emails (only if payment completed now)
+      if (paymentTiming === 'now' && paymentMethod === 'wallet') {
+        await sendBookingConfirmationEmails(bookingId);
       }
 
       // Send message to host if provided
@@ -563,32 +791,32 @@ const PaymentProcessing = () => {
       <div className="min-h-screen bg-slate-50 pt-20 pb-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Progress Steps */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between">
               {steps.map((step, idx) => (
                 <React.Fragment key={step.number}>
                   <div className="flex flex-col items-center flex-1">
                     <div className={`
-                      w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm transition-all
+                      w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs transition-all
                       ${currentStep >= step.number 
                         ? 'bg-emerald-600 text-white' 
                         : 'bg-gray-200 text-gray-500'
                       }
                     `}>
                       {currentStep > step.number ? (
-                        <FaCheckCircle className="w-6 h-6" />
+                        <FaCheckCircle className="w-5 h-5" />
                       ) : (
-                        <step.icon className="w-6 h-6" />
+                        <step.icon className="w-5 h-5" />
                       )}
                     </div>
-                    <span className={`text-xs mt-2 font-medium ${
+                    <span className={`text-[10px] mt-1.5 font-medium ${
                       currentStep >= step.number ? 'text-emerald-600' : 'text-gray-500'
                     }`}>
                       {step.title}
                     </span>
                   </div>
                   {idx < steps.length - 1 && (
-                    <div className={`flex-1 h-1 mx-2 ${
+                    <div className={`flex-1 h-0.5 mx-1.5 ${
                       currentStep > step.number ? 'bg-emerald-600' : 'bg-gray-200'
                     }`} />
                   )}
@@ -598,7 +826,7 @@ const PaymentProcessing = () => {
           </div>
 
           {/* Main Content */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 lg:p-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 lg:p-6">
             <AnimatePresence mode="wait">
               {/* Step 1: Choose Payment Timing */}
               {currentStep === 1 && (
@@ -671,46 +899,105 @@ const PaymentProcessing = () => {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Select Payment Method</h2>
-                    <p className="text-gray-600">Choose how you'd like to pay</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Select Payment Method</h2>
+                    <p className="text-sm text-gray-600">Choose how you'd like to pay</p>
                   </div>
 
-                  <div className="space-y-4">
+                  {/* Promo Code Section */}
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <FaTag className="inline mr-2 text-emerald-600" />
+                      Promo Code
+                    </label>
+                    {!appliedPromoCode ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={promoCode}
+                          onChange={(e) => {
+                            setPromoCode(e.target.value.toUpperCase());
+                            setPromoCodeError('');
+                          }}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleApplyPromoCode();
+                            }
+                          }}
+                          placeholder="Enter promo code"
+                          className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none text-sm uppercase"
+                          disabled={validatingPromoCode}
+                        />
+                        <button
+                          onClick={handleApplyPromoCode}
+                          disabled={validatingPromoCode || !promoCode.trim()}
+                          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {validatingPromoCode ? '...' : 'Apply'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-emerald-300">
+                        <div className="flex items-center gap-2">
+                          <FaCheckCircle className="text-emerald-600" />
+                          <span className="font-mono font-semibold text-emerald-700">{appliedPromoCode.code}</span>
+                          <span className="text-sm text-gray-600">
+                            - {appliedPromoCode.discount}{appliedPromoCode.discountType === 'percentage' ? '%' : '₱'} off
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleRemovePromoCode}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                          title="Remove promo code"
+                        >
+                          <FaTimes className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                    {promoCodeError && (
+                      <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+                        <FaTimes className="w-3 h-3" />
+                        {promoCodeError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
                     <button
                       onClick={() => setPaymentMethod('wallet')}
-                      className={`w-full p-6 rounded-xl border-2 transition-all text-left ${
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                         paymentMethod === 'wallet'
                           ? 'border-emerald-600 bg-emerald-50'
                           : 'border-gray-200 hover:border-emerald-300'
                       }`}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-1 ${
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                           paymentMethod === 'wallet' ? 'border-emerald-600 bg-emerald-600' : 'border-gray-300'
                         }`}>
-                          {paymentMethod === 'wallet' && <FaCheckCircle className="w-4 h-4 text-white" />}
+                          {paymentMethod === 'wallet' && <FaCheckCircle className="w-3 h-3 text-white" />}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
-                            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm">
                               <FaWallet className="text-emerald-600" />
                               Wallet
                             </h3>
-                            <span className="text-sm font-semibold text-gray-700">
+                            <span className="text-xs font-semibold text-gray-700">
                               ₱{walletBalance.toLocaleString()} available
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs text-gray-600">
                             Use your wallet balance to pay instantly
                           </p>
                           {walletBalance < finalTotal && paymentMethod === 'wallet' && (
-                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-                              <p className="text-xs text-yellow-800 flex items-center gap-2">
-                                <FaInfoCircle />
-                                Insufficient balance. You need ₱{(finalTotal - walletBalance).toLocaleString()} more.
+                            <div className="mt-1.5 p-1.5 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                              <p className="text-yellow-800 flex items-center gap-1">
+                                <FaInfoCircle className="w-3 h-3" />
+                                Need ₱{(finalTotal - walletBalance).toLocaleString()} more
                               </p>
                             </div>
                           )}
@@ -720,24 +1007,24 @@ const PaymentProcessing = () => {
 
                     <button
                       onClick={() => setPaymentMethod('paypal')}
-                      className={`w-full p-6 rounded-xl border-2 transition-all text-left ${
+                      className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
                         paymentMethod === 'paypal'
                           ? 'border-emerald-600 bg-emerald-50'
                           : 'border-gray-200 hover:border-emerald-300'
                       }`}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-1 ${
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                           paymentMethod === 'paypal' ? 'border-emerald-600 bg-emerald-600' : 'border-gray-300'
                         }`}>
-                          {paymentMethod === 'paypal' && <FaCheckCircle className="w-4 h-4 text-white" />}
+                          {paymentMethod === 'paypal' && <FaCheckCircle className="w-3 h-3 text-white" />}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-bold text-gray-900 flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm mb-1">
                             <FaPaypal className="text-blue-600" />
                             PayPal
                           </h3>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs text-gray-600">
                             Pay securely with PayPal
                           </p>
                         </div>
@@ -749,9 +1036,9 @@ const PaymentProcessing = () => {
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      className="mt-4"
+                      className="mt-3"
                     >
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                         PayPal Email Address
                       </label>
                       <input
@@ -759,7 +1046,7 @@ const PaymentProcessing = () => {
                         value={paypalEmail}
                         onChange={(e) => setPaypalEmail(e.target.value)}
                         placeholder="your.email@example.com"
-                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:outline-none"
+                        className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none text-sm"
                       />
                     </motion.div>
                   )}
@@ -773,11 +1060,11 @@ const PaymentProcessing = () => {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Message to Host</h2>
-                    <p className="text-gray-600">Let your host know about your stay (optional)</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Message to Host</h2>
+                    <p className="text-sm text-gray-600">Let your host know about your stay (optional)</p>
                   </div>
 
                   <div>
@@ -785,10 +1072,10 @@ const PaymentProcessing = () => {
                       value={messageToHost}
                       onChange={(e) => setMessageToHost(e.target.value)}
                       placeholder="Hi! I'm looking forward to staying at your place. I'll be arriving around 3 PM..."
-                      rows={6}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-emerald-500 focus:outline-none resize-none"
+                      rows={5}
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none resize-none text-sm"
                     />
-                    <p className="text-xs text-gray-500 mt-2">
+                    <p className="text-xs text-gray-500 mt-1.5">
                       {messageToHost.length} characters
                     </p>
                   </div>
@@ -802,31 +1089,31 @@ const PaymentProcessing = () => {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-6"
+                  className="space-y-4"
                 >
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Review Your Booking</h2>
-                    <p className="text-gray-600">Please review all details before confirming</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Review Your Booking</h2>
+                    <p className="text-sm text-gray-600">Please review all details before confirming</p>
                   </div>
 
                   {/* Listing Summary */}
-                  <div className="bg-slate-50 rounded-xl p-6 border border-gray-200">
-                    <div className="flex gap-4 mb-4">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                    <div className="flex gap-3 mb-3">
                       {listing.images && listing.images[0] && (
                         <img
                           src={listing.images[0]}
                           alt={listing.title}
-                          className="w-24 h-24 rounded-lg object-cover"
+                          className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
                         />
                       )}
-                      <div className="flex-1">
-                        <h3 className="font-bold text-gray-900 mb-1">{listing.title}</h3>
-                        <p className="text-sm text-gray-600">{listing.location}</p>
-                        <p className="text-xs text-gray-500 mt-1 capitalize">{listing.category}</p>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 mb-0.5 text-sm truncate">{listing.title}</h3>
+                        <p className="text-xs text-gray-600 truncate">{listing.location}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 capitalize">{listing.category}</p>
                       </div>
                     </div>
 
-                    <div className="space-y-2 pt-4 border-t border-gray-200">
+                    <div className="space-y-1.5 pt-3 border-t border-gray-200">
                       {listing.category === 'home' && currentBookingData.checkIn && currentBookingData.checkOut && (
                         <>
                           <div className="flex justify-between text-sm">
@@ -863,54 +1150,63 @@ const PaymentProcessing = () => {
                   </div>
 
                   {/* Payment Summary */}
-                  <div className="bg-slate-50 rounded-xl p-6 border border-gray-200">
-                    <h3 className="font-bold text-gray-900 mb-4">Payment Summary</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                    <h3 className="font-semibold text-gray-900 mb-3 text-sm">Payment Summary</h3>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-xs">
                         <span className="text-gray-600">Subtotal</span>
                         <span className="font-medium text-gray-900">₱{totalAmount.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between text-sm">
+                      {appliedPromoCode && promoDiscount > 0 && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600 flex items-center gap-1">
+                            <FaTag className="text-emerald-600" />
+                            Promo Code ({appliedPromoCode.code})
+                          </span>
+                          <span className="font-medium text-emerald-600">-₱{promoDiscount.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs">
                         <span className="text-gray-600">Service fee</span>
                         <span className="font-medium text-gray-900">₱{serviceFee.toLocaleString()}</span>
                       </div>
-                      <div className="pt-3 border-t border-gray-300 flex justify-between">
-                        <span className="font-bold text-gray-900">Total</span>
-                        <span className="font-bold text-emerald-600 text-lg">₱{finalTotal.toLocaleString()}</span>
+                      <div className="pt-2 border-t border-gray-300 flex justify-between">
+                        <span className="font-bold text-gray-900 text-sm">Total</span>
+                        <span className="font-bold text-emerald-600 text-base">₱{finalTotal.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Payment Details */}
-                  <div className="bg-slate-50 rounded-xl p-6 border border-gray-200">
-                    <h3 className="font-bold text-gray-900 mb-4">Payment Details</h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                    <h3 className="font-semibold text-gray-900 mb-3 text-sm">Payment Details</h3>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-xs">
                         <span className="text-gray-600">Payment Timing</span>
                         <span className="font-medium text-gray-900 capitalize">
                           {paymentTiming === 'now' ? 'Pay Now' : 'Pay Later'}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between text-xs">
                         <span className="text-gray-600">Payment Method</span>
-                        <span className="font-medium text-gray-900 capitalize flex items-center gap-2">
+                        <span className="font-medium text-gray-900 capitalize flex items-center gap-1.5">
                           {paymentMethod === 'wallet' ? (
                             <>
-                              <FaWallet className="text-emerald-600" />
+                              <FaWallet className="text-emerald-600 w-3 h-3" />
                               Wallet
                             </>
                           ) : (
                             <>
-                              <FaPaypal className="text-blue-600" />
+                              <FaPaypal className="text-blue-600 w-3 h-3" />
                               PayPal
                             </>
                           )}
                         </span>
                       </div>
                       {paymentMethod === 'paypal' && paypalEmail && (
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-xs">
                           <span className="text-gray-600">PayPal Email</span>
-                          <span className="font-medium text-gray-900">{paypalEmail}</span>
+                          <span className="font-medium text-gray-900 truncate ml-2">{paypalEmail}</span>
                         </div>
                       )}
                     </div>
@@ -918,19 +1214,19 @@ const PaymentProcessing = () => {
 
                   {/* Message Preview */}
                   {messageToHost.trim() && (
-                    <div className="bg-slate-50 rounded-xl p-6 border border-gray-200">
-                      <h3 className="font-bold text-gray-900 mb-2">Message to Host</h3>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{messageToHost}</p>
+                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                      <h3 className="font-semibold text-gray-900 mb-2 text-sm">Message to Host</h3>
+                      <p className="text-xs text-gray-700 whitespace-pre-wrap">{messageToHost}</p>
                     </div>
                   )}
 
                   {/* Security Notice */}
-                  <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                    <FaShieldAlt className="text-emerald-600 mt-1 flex-shrink-0" />
+                  <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <FaShieldAlt className="text-emerald-600 mt-0.5 flex-shrink-0 w-4 h-4" />
                     <div>
-                      <p className="text-sm font-semibold text-emerald-900">Secure Payment</p>
-                      <p className="text-xs text-emerald-700 mt-1">
-                        Your payment information is encrypted and secure. We never store your full payment details.
+                      <p className="text-xs font-semibold text-emerald-900">Secure Payment</p>
+                      <p className="text-xs text-emerald-700 mt-0.5">
+                        Your payment information is encrypted and secure.
                       </p>
                     </div>
                   </div>
@@ -939,22 +1235,22 @@ const PaymentProcessing = () => {
             </AnimatePresence>
 
             {/* Navigation Buttons */}
-            <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
               <button
                 onClick={handleBack}
-                className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors font-semibold"
+                className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
               >
-                <FaChevronLeft className="w-4 h-4" />
+                <FaChevronLeft className="w-3 h-3" />
                 Back
               </button>
 
               {currentStep < 4 ? (
                 <button
                   onClick={handleNext}
-                  className="flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold"
+                  className="flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm"
                 >
                   Continue
-                  <FaChevronRight className="w-4 h-4" />
+                  <FaChevronRight className="w-3 h-3" />
                 </button>
               ) : (
                 <>
@@ -1002,16 +1298,16 @@ const PaymentProcessing = () => {
                     <button
                       onClick={handleCompleteBooking}
                       disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
-                      className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {processing ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           Processing...
                         </>
                       ) : (
                         <>
-                          <FaLock className="w-4 h-4" />
+                          <FaLock className="w-3.5 h-3.5" />
                           Confirm Booking
                         </>
                       )}

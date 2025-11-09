@@ -1,7 +1,7 @@
 // src/pages/HostRewards.jsx
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { getHostProfile } from '../services/firestoreService';
+import { motion, AnimatePresence } from 'framer-motion';
+import { getHostProfile, updateHostPoints } from '../services/firestoreService';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import useAuth from '../hooks/useAuth';
@@ -12,7 +12,8 @@ import {
   FaCoins,
   FaChartLine,
   FaCheckCircle,
-  FaArrowUp
+  FaArrowUp,
+  FaSpinner
 } from 'react-icons/fa';
 
 const HostRewards = () => {
@@ -20,6 +21,9 @@ const HostRewards = () => {
   const [hostProfile, setHostProfile] = useState(null);
   const [pointsHistory, setPointsHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [redeeming, setRedeeming] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -29,26 +33,66 @@ const HostRewards = () => {
 
   const fetchRewardsData = async () => {
     try {
+      setLoading(true);
+      setError('');
       const profileResult = await getHostProfile(user.uid);
       if (profileResult.success && profileResult.data) {
         setHostProfile(profileResult.data);
+      } else {
+        setError('Failed to load host profile');
       }
 
       // Fetch points transactions
-      const pointsRef = collection(db, 'pointsTransactions');
-      const q = query(
-        pointsRef,
-        where('hostId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const history = [];
-      querySnapshot.forEach((doc) => {
-        history.push({ id: doc.id, ...doc.data() });
-      });
-      setPointsHistory(history);
+      try {
+        const pointsRef = collection(db, 'pointsTransactions');
+        const q = query(
+          pointsRef,
+          where('hostId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        const history = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          history.push({ 
+            id: doc.id, 
+            ...data,
+            createdAt: data.createdAt
+          });
+        });
+        setPointsHistory(history);
+      } catch (queryError) {
+        // If index error, try without orderBy
+        if (queryError.code === 'failed-precondition') {
+          const pointsRef = collection(db, 'pointsTransactions');
+          const q = query(
+            pointsRef,
+            where('hostId', '==', user.uid)
+          );
+          const querySnapshot = await getDocs(q);
+          const history = [];
+          querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            history.push({ 
+              id: doc.id, 
+              ...data,
+              createdAt: data.createdAt
+            });
+          });
+          // Sort in memory
+          history.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : (a.createdAt ? new Date(a.createdAt) : new Date(0));
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : (b.createdAt ? new Date(b.createdAt) : new Date(0));
+            return dateB - dateA;
+          });
+          setPointsHistory(history);
+        } else {
+          console.error('Error fetching points history:', queryError);
+        }
+      }
     } catch (error) {
       console.error('Error fetching rewards data:', error);
+      setError('Failed to load rewards data');
     } finally {
       setLoading(false);
     }
@@ -58,14 +102,58 @@ const HostRewards = () => {
 
   // Calculate tier based on points
   const getTier = () => {
-    if (points >= 10000) return { name: 'Platinum', color: 'purple', icon: FaTrophy };
-    if (points >= 5000) return { name: 'Gold', color: 'yellow', icon: FaStar };
-    if (points >= 2000) return { name: 'Silver', color: 'gray', icon: FaStar };
-    return { name: 'Bronze', color: 'orange', icon: FaStar };
+    if (points >= 10000) return { 
+      name: 'Platinum', 
+      bgGradient: 'from-purple-500 to-purple-700',
+      icon: FaTrophy 
+    };
+    if (points >= 5000) return { 
+      name: 'Gold', 
+      bgGradient: 'from-yellow-500 to-yellow-700',
+      icon: FaStar 
+    };
+    if (points >= 2000) return { 
+      name: 'Silver', 
+      bgGradient: 'from-gray-400 to-gray-600',
+      icon: FaStar 
+    };
+    return { 
+      name: 'Bronze', 
+      bgGradient: 'from-orange-500 to-orange-700',
+      icon: FaStar 
+    };
   };
 
   const tier = getTier();
   const TierIcon = tier.icon;
+
+  const handleRedeemReward = async (reward) => {
+    if (points < reward.points) {
+      setError(`You need ${reward.points - points} more points to redeem this reward`);
+      setTimeout(() => setError(''), 5000);
+      return;
+    }
+
+    try {
+      setRedeeming(reward.points);
+      setError('');
+      
+      // Deduct points
+      await updateHostPoints(user.uid, -reward.points, `Redeemed: ${reward.reward}`);
+      
+      // Refresh data
+      await fetchRewardsData();
+      
+      setSuccess(`Successfully redeemed ${reward.reward}!`);
+      setTimeout(() => setSuccess(''), 5000);
+    } catch (error) {
+      console.error('Error redeeming reward:', error);
+      setError('Failed to redeem reward. Please try again.');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setRedeeming(null);
+    }
+  };
 
   const rewards = [
     { points: 500, reward: '₱500 Discount Voucher', available: points >= 500 },
@@ -101,6 +189,34 @@ const HostRewards = () => {
         <p className="text-gray-600">Earn points and unlock exclusive rewards</p>
       </div>
 
+      {/* Error Notification */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-red-50 border-l-4 border-red-500 p-4 rounded"
+          >
+            <p className="text-red-700 text-sm">{error}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Notification */}
+      <AnimatePresence>
+        {success && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="bg-emerald-50 border-l-4 border-emerald-500 p-4 rounded"
+          >
+            <p className="text-emerald-700 text-sm">{success}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Points Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <motion.div
@@ -121,7 +237,7 @@ const HostRewards = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className={`bg-gradient-to-br from-${tier.color}-500 to-${tier.color}-700 rounded-xl shadow-lg p-6 text-white`}
+          className={`bg-gradient-to-br ${tier.bgGradient} rounded-xl shadow-lg p-6 text-white`}
         >
           <div className="flex items-center justify-between mb-4">
             <TierIcon className="text-3xl" />
@@ -220,8 +336,19 @@ const HostRewards = () => {
                   </div>
                   <div className="text-right">
                     {reward.available ? (
-                      <button className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium">
-                        Redeem
+                      <button 
+                        onClick={() => handleRedeemReward(reward)}
+                        disabled={redeeming === reward.points}
+                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {redeeming === reward.points ? (
+                          <>
+                            <FaSpinner className="animate-spin" />
+                            Redeeming...
+                          </>
+                        ) : (
+                          'Redeem'
+                        )}
                       </button>
                     ) : (
                       <div className="text-sm text-gray-500">
@@ -262,10 +389,18 @@ const HostRewards = () => {
                   <div>
                     <p className="font-medium text-gray-900">{transaction.reason || 'Points earned'}</p>
                     <p className="text-sm text-gray-500">
-                      {transaction.createdAt?.toDate
-                        ? transaction.createdAt.toDate().toLocaleString()
-                        : new Date(transaction.createdAt).toLocaleString()
-                      }
+                      {(() => {
+                        try {
+                          if (transaction.createdAt?.toDate) {
+                            return transaction.createdAt.toDate().toLocaleString();
+                          } else if (transaction.createdAt) {
+                            return new Date(transaction.createdAt).toLocaleString();
+                          }
+                          return 'Date unavailable';
+                        } catch (e) {
+                          return 'Date unavailable';
+                        }
+                      })()}
                     </p>
                   </div>
                   <div className="text-right">

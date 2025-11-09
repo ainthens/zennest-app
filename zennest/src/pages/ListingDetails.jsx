@@ -4,10 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { getHostProfile, getUserFavorites, toggleFavorite, getOrCreateConversation } from '../services/firestoreService';
+import { getHostProfile, getUserFavorites, toggleFavorite, getOrCreateConversation, updateHostPoints } from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
 import Loading from '../components/Loading';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   FaHeart,
   FaRegHeart,
@@ -50,6 +53,14 @@ import {
   FaCalendarCheck
 } from 'react-icons/fa';
 
+// Fix Leaflet default icon issue
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
 const ListingDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -86,6 +97,8 @@ const ListingDetails = () => {
   const [hasReviewed, setHasReviewed] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [mapPosition, setMapPosition] = useState([14.5995, 120.9842]); // Default to Manila
+  const [mapZoom, setMapZoom] = useState(13);
   const [reviewForm, setReviewForm] = useState({
     rating: 5,
     cleanliness: 5,
@@ -176,6 +189,11 @@ const ListingDetails = () => {
               checkCanReview(listingData.id, user.uid);
             }
           }
+
+          // Geocode location for map
+          if (listingData.location) {
+            geocodeLocation(listingData.location);
+          }
         } else {
           setError('Listing not found');
         }
@@ -248,7 +266,6 @@ const ListingDetails = () => {
       const querySnapshot = await getDocs(q);
       
       let hasCompletedBooking = false;
-      const userReviewIds = [];
       
       querySnapshot.forEach((doc) => {
         const booking = doc.data();
@@ -779,6 +796,17 @@ const ListingDetails = () => {
         updatedAt: serverTimestamp()
       });
       
+      // Award points to host for 5-star review
+      if (reviewForm.rating === 5 && listing.hostId) {
+        try {
+          await updateHostPoints(listing.hostId, 25, 'Received 5-star review');
+          console.log('✅ Points awarded to host for 5-star review');
+        } catch (pointsError) {
+          console.error('Error awarding points for review:', pointsError);
+          // Don't fail the review submission if points fail
+        }
+      }
+      
       // Update local state
       const processedNewReview = {
         ...newReview,
@@ -820,6 +848,27 @@ const ListingDetails = () => {
     setCheckOut('');
     setSelectedDates({ start: null, end: null });
     setCalendarMode('checkIn');
+  };
+
+  // Geocode location string to coordinates
+  const geocodeLocation = async (locationString) => {
+    try {
+      // Use Nominatim (OpenStreetMap) geocoding service
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationString)}&limit=1`
+      );
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        setMapPosition([lat, lon]);
+        setMapZoom(13);
+      }
+    } catch (error) {
+      console.error('Error geocoding location:', error);
+      // Keep default position if geocoding fails
+    }
   };
 
   const renderCalendar = () => {
@@ -2038,18 +2087,26 @@ const ListingDetails = () => {
               {listing.location && listing.location.trim() && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 lg:p-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Where you'll be</h2>
-                  <div className="rounded-xl overflow-hidden border-2 border-gray-200 mb-4">
-                    <iframe
-                      width="100%"
-                      height="450"
-                      style={{ border: 0 }}
-                      loading="lazy"
-                      allowFullScreen
-                      referrerPolicy="no-referrer-when-downgrade"
-                      src={`https://www.google.com/maps?q=${encodeURIComponent(listing.location)}&output=embed`}
-                      title="Listing location"
-                      className="w-full"
-                    />
+                  <div className="rounded-xl overflow-hidden border-2 border-gray-200 mb-4" style={{ height: '450px', zIndex: 0 }}>
+                    <MapContainer
+                      center={mapPosition}
+                      zoom={mapZoom}
+                      style={{ height: '100%', width: '100%' }}
+                      scrollWheelZoom={true}
+                    >
+                      <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <Marker position={mapPosition}>
+                        <Popup>
+                          <div className="text-center">
+                            <p className="font-semibold text-gray-900">{listing.title}</p>
+                            <p className="text-sm text-gray-600">{listing.location}</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    </MapContainer>
                   </div>
                   <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl">
                     <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
@@ -2058,12 +2115,12 @@ const ListingDetails = () => {
                     <div className="flex-1">
                       <p className="font-bold text-gray-900 mb-1 text-base">{listing.location}</p>
                       <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(listing.location)}`}
+                        href={`https://www.openstreetmap.org/?mlat=${mapPosition[0]}&mlon=${mapPosition[1]}&zoom=${mapZoom}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-emerald-600 hover:text-emerald-700 font-semibold inline-flex items-center gap-2"
                       >
-                        Open in Google Maps
+                        Open in OpenStreetMap
                         <span>→</span>
                       </a>
                     </div>
