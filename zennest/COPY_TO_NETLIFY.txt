@@ -1,0 +1,27 @@
+===========================================
+COPY THIS TO NETLIFY DASHBOARD
+===========================================
+
+1. Go to: https://app.netlify.com/sites/YOUR-SITE/settings/env
+
+2. Click "Add a variable"
+
+3. Copy and paste:
+
+   KEY: VITE_PAYPAL_CLIENT_ID
+   
+   VALUE: ARzGT5OD83ycL2CMD_PbN3i0Fhi5hrkokMORjahS7gtpvbTtfyNOHXnfaMCRM-Z059Kg3ZKiSlPuZ_Tz
+
+4. Select ALL scopes:
+   ✅ Production
+   ✅ Deploy Previews  
+   ✅ Branch deploys
+
+5. Click "Save"
+
+6. Go to Deploys tab → Trigger deploy → Deploy site
+
+===========================================
+DONE! 🎉
+===========================================
+

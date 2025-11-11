@@ -16,7 +16,8 @@ import {
   deleteConversation
 } from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
-import { FaEnvelope, FaPaperPlane, FaUser, FaSpinner, FaMapMarkerAlt, FaTrash } from 'react-icons/fa';
+import SettingsHeader from '../components/SettingsHeader';
+import { FaEnvelope, FaPaperPlane, FaUser, FaSpinner, FaMapMarkerAlt, FaTrash, FaArrowLeft } from 'react-icons/fa';
 
 const HostMessages = () => {
   const { user } = useAuth();
@@ -36,6 +37,7 @@ const HostMessages = () => {
   const [failedImages, setFailedImages] = useState(new Set()); // Track failed image URLs
   const [deletingId, setDeletingId] = useState(null); // Track which message is being deleted
   const [deletingConversationId, setDeletingConversationId] = useState(null); // Track which conversation is being deleted
+  const [showConversationList, setShowConversationList] = useState(true); // Mobile: control which panel is visible
 
   useEffect(() => {
     if (!user?.uid) {
@@ -249,6 +251,16 @@ const HostMessages = () => {
   const handleSelectConversation = (conversation) => {
     setSelectedConversation(conversation);
     setMessages([]); // Clear messages while loading
+    // On mobile, hide conversation list and show message view
+    if (window.innerWidth < 768) {
+      setShowConversationList(false);
+    }
+  };
+
+  const handleBackToConversations = () => {
+    setShowConversationList(true);
+    setSelectedConversation(null);
+    setMessages([]);
   };
 
   const handleSendMessage = async (e) => {
@@ -458,38 +470,77 @@ const HostMessages = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading conversations...</p>
+      <>
+        <SettingsHeader />
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+                <p className="text-gray-600" style={{ fontFamily: 'Poppins, sans-serif' }}>Loading conversations...</p>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="flex flex-1 overflow-hidden">
-        {/* Conversations List */}
-        <div className="w-1/3 border-r border-gray-200 flex flex-col bg-gray-50">
-          <div className="p-4 border-b border-gray-200 bg-white">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <FaEnvelope className="text-emerald-600" />
+    <>
+      <SettingsHeader />
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+          {/* Header - Hidden on mobile when conversation is selected */}
+          <div className={`mb-4 sm:mb-6 ${selectedConversation && !showConversationList ? 'hidden md:block' : ''}`}>
+            <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 mb-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
               Messages
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {conversations.length} conversation{conversations.length === 1 ? '' : 's'}
+            </h1>
+            <p className="text-gray-600 text-base sm:text-lg" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              {conversations.length > 0
+                ? `You have ${conversations.length} conversation${conversations.length === 1 ? '' : 's'}`
+                : 'Guests will contact you here'}
             </p>
           </div>
+
+          <div className="h-[calc(100vh-12rem)] sm:h-[calc(100vh-14rem)] md:h-[calc(100vh-16rem)] flex flex-col bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden relative">
+              {/* Conversations List */}
+              <div className={`
+                absolute md:relative inset-0 z-10 md:z-auto
+                ${showConversationList ? 'block' : 'hidden md:block'}
+                w-full md:w-1/3 lg:w-1/4
+                border-r border-gray-200 
+                flex flex-col bg-gray-50
+                transition-transform duration-300 ease-in-out
+              `}>
+                <div className="p-4 border-b border-gray-200 bg-white">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center gap-2" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                      <FaEnvelope className="text-emerald-600" />
+                      Messages
+                    </h2>
+                    {/* Close button for mobile */}
+                    <button
+                      onClick={() => setShowConversationList(false)}
+                      className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <FaArrowLeft className="w-4 h-4 text-gray-600" />
+                    </button>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-600" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                    {conversations.length} conversation{conversations.length === 1 ? '' : 's'}
+                  </p>
+                </div>
           
           <div className="flex-1 overflow-y-auto">
-            {conversations.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <FaEnvelope className="text-4xl mx-auto mb-2 text-gray-300" />
-                <p>No messages yet</p>
-                <p className="text-sm mt-2">Guests will contact you here</p>
-              </div>
-            ) : (
+                {conversations.length === 0 ? (
+                  <div className="p-6 sm:p-8 text-center text-gray-500">
+                    <FaEnvelope className="text-3xl sm:text-4xl mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm sm:text-base" style={{ fontFamily: 'Poppins, sans-serif' }}>No messages yet</p>
+                    <p className="text-xs sm:text-sm mt-2" style={{ fontFamily: 'Poppins, sans-serif' }}>Guests will contact you here</p>
+                  </div>
+                ) : (
               <div className="divide-y divide-gray-200">
                 {conversations.map((conversation, index) => {
                   const guestName = getGuestName(conversation);
@@ -505,7 +556,7 @@ const HostMessages = () => {
                       transition={{ duration: 0.2, delay: index * 0.05 }}
                       onClick={() => handleSelectConversation(conversation)}
                       className={`
-                        w-full text-left p-4 hover:bg-white transition-colors relative group
+                        w-full text-left p-3 sm:p-4 hover:bg-white transition-colors relative group
                         ${isSelected ? 'bg-white border-l-4 border-emerald-600' : ''}
                       `}
                     >
@@ -514,22 +565,26 @@ const HostMessages = () => {
                           <img
                             src={guestAvatar}
                             alt={guestName}
-                            className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover flex-shrink-0"
                             onError={handleImageError}
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-semibold text-sm sm:text-base flex-shrink-0">
                             {guestName.charAt(0).toUpperCase()}
                           </div>
                         )}
                         
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between mb-1">
+                          <div className="flex items-start justify-between mb-1 gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-gray-900 truncate">{guestName}</p>
-                              <div className="flex items-center gap-2 mt-1">
+                              <p className="font-semibold text-gray-900 truncate text-sm sm:text-base" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                {guestName}
+                              </p>
+                              <div className="flex items-center gap-1.5 sm:gap-2 mt-1">
                                 <FaMapMarkerAlt className="text-emerald-600 text-xs flex-shrink-0" />
-                                <p className="text-xs text-gray-600 truncate">{conversation.listingTitle}</p>
+                                <p className="text-xs text-gray-600 truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                  {conversation.listingTitle}
+                                </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
@@ -556,12 +611,12 @@ const HostMessages = () => {
                           </div>
                           
                           {conversation.lastMessage && (
-                            <p className="text-sm text-gray-500 truncate mt-1">
+                            <p className="text-xs sm:text-sm text-gray-500 truncate mt-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
                               {conversation.lastMessage}
                             </p>
                           )}
                           
-                          <p className="text-xs text-gray-400 mt-1">
+                          <p className="text-xs text-gray-400 mt-1" style={{ fontFamily: 'Poppins, sans-serif' }}>
                             {formatTime(conversation.lastMessageAt || conversation.createdAt)}
                           </p>
                         </div>
@@ -574,12 +629,24 @@ const HostMessages = () => {
           </div>
         </div>
 
-        {/* Message View */}
-        <div className="flex-1 flex flex-col">
-          {selectedConversation ? (
-            <>
-              <div className="p-4 border-b border-gray-200 bg-white">
-                <div className="flex items-center gap-3">
+              {/* Message View */}
+              <div className={`
+                absolute md:relative inset-0 z-10 md:z-auto
+                ${!showConversationList || selectedConversation ? 'block' : 'hidden md:flex'}
+                flex-1 flex flex-col bg-white
+                transition-transform duration-300 ease-in-out
+              `}>
+                {selectedConversation ? (
+                  <>
+                    <div className="p-3 sm:p-4 border-b border-gray-200 bg-white">
+                      <div className="flex items-center gap-3">
+                        {/* Back Button (Mobile Only) */}
+                        <button
+                          onClick={handleBackToConversations}
+                          className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                        >
+                          <FaArrowLeft className="w-5 h-5 text-gray-600" />
+                        </button>
                   {(() => {
                     const avatar = getGuestAvatar(selectedConversation);
                     const name = getGuestName(selectedConversation);
@@ -596,28 +663,30 @@ const HostMessages = () => {
                       </div>
                     );
                   })()}
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{getGuestName(selectedConversation)}</h3>
-                    <p className="text-sm text-gray-600">
-                      {isGuestTyping ? (
-                        <span className="text-emerald-600 italic flex items-center gap-1">
-                          <span className="animate-pulse">typing</span>
-                          <span className="inline-flex gap-1">
-                            <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                            <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                            <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                          </span>
-                        </span>
-                      ) : (
-                        selectedConversation.listingTitle
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                            {getGuestName(selectedConversation)}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-gray-600 truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                            {isGuestTyping ? (
+                              <span className="text-emerald-600 italic flex items-center gap-1">
+                                <span className="animate-pulse">typing</span>
+                                <span className="inline-flex gap-1">
+                                  <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                  <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                  <span className="w-1 h-1 bg-emerald-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                </span>
+                              </span>
+                            ) : (
+                              selectedConversation.listingTitle
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-              <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-50 to-white"
-                   style={{ scrollbarWidth: 'thin' }}>
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gradient-to-b from-gray-50 to-white"
+                         style={{ scrollbarWidth: 'thin' }}>
                 {messages.length === 0 ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center text-gray-500">
@@ -644,7 +713,7 @@ const HostMessages = () => {
                         transition={{ duration: 0.2 }}
                         className={`flex ${isHost ? 'justify-end' : 'justify-start'} mb-2`}
                       >
-                        <div className={`flex items-end gap-2 max-w-[70%] sm:max-w-[75%] ${isHost ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <div className={`flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${isHost ? 'flex-row-reverse' : 'flex-row'}`}>
                           {/* Avatar (only for guest messages) */}
                           {!isHost && (
                             <div className="flex-shrink-0">
@@ -770,44 +839,50 @@ const HostMessages = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-white">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={handleInputChange}
-                    placeholder="Type a message..."
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                    disabled={sending}
-                  />
-                  <motion.button
-                    type="submit"
-                    disabled={!newMessage.trim() || sending}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label="Send message"
-                  >
-                    {sending ? (
-                      <FaSpinner className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <FaPaperPlane className="w-5 h-5" />
-                    )}
-                  </motion.button>
-                </div>
-              </form>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-gray-500">
-              <div className="text-center">
-                <FaEnvelope className="text-5xl mx-auto mb-4 text-gray-300" />
-                <p>Select a conversation to view messages</p>
+                    <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t border-gray-200 bg-white">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <input
+                          type="text"
+                          value={newMessage}
+                          onChange={handleInputChange}
+                          placeholder="Type a message..."
+                          className="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                          style={{ fontFamily: 'Poppins, sans-serif' }}
+                          disabled={sending}
+                        />
+                        <motion.button
+                          type="submit"
+                          disabled={!newMessage.trim() || sending}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className="p-2.5 sm:p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                          aria-label="Send message"
+                        >
+                          {sending ? (
+                            <FaSpinner className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                          ) : (
+                            <FaPaperPlane className="w-4 h-4 sm:w-5 sm:h-5" />
+                          )}
+                        </motion.button>
+                      </div>
+                    </form>
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-500 p-4">
+                    <div className="text-center">
+                      <FaEnvelope className="text-4xl sm:text-5xl mx-auto mb-4 text-gray-300" />
+                      <p className="text-sm sm:text-base" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                        Select a conversation to view messages
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
