@@ -283,7 +283,6 @@ const Login = () => {
           className="w-full max-w-md"
         >
 
-
           {/* Logo & Welcome */}
           <div className="text-center mb-5">
             <motion.img

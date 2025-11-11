@@ -1,841 +1,754 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  FaSearch,
-  FaCalendarAlt,
-  FaUsers,
-  FaMapMarkerAlt,
+// src/pages/LandingPage.jsx
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, useScroll, useTransform } from "framer-motion";
+import { useInView } from "react-intersection-observer";
+import waveSvg from "../assets/wave (1).svg";
+import heroVideo from "../assets/homestays_video.webm";
+import { 
+  FaUmbrellaBeach, 
+  FaCity, 
+  FaMountain, 
+  FaUtensils,
   FaHome,
+  FaCalendarCheck,
   FaShieldAlt,
-  FaCreditCard,
-  FaHeadset,
   FaStar,
   FaCheckCircle,
   FaArrowRight,
-  FaFacebook,
-  FaTwitter,
-  FaInstagram,
-  FaYoutube,
-  FaPhoneAlt,
-  FaEnvelope,
-  FaGlobe,
-  FaHeart,
-  FaBed,
-  FaBath,
-  FaWifi,
-  FaParking,
-  FaSwimmingPool,
-  FaUmbrellaBeach,
-  FaMountain,
-  FaCity,
-  FaQuoteLeft,
-  FaUserShield,
-  FaAward,
-  FaRocket,
-  FaHandshake,
-  FaPaperPlane
-} from 'react-icons/fa';
-import { collection, getDocs, query, where, limit } from 'firebase/firestore';
-import { db } from '../config/firebase';
+  FaChartLine,
+  FaUsers,
+  FaHandHoldingUsd
+} from "react-icons/fa";
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const [location, setLocation] = useState('');
-  const [checkIn, setCheckIn] = useState('');
-  const [checkOut, setCheckOut] = useState('');
-  const [guests, setGuests] = useState(1);
-  const [email, setEmail] = useState('');
-  const [featuredListings, setFeaturedListings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [subscribeSuccess, setSubscribeSuccess] = useState(false);
+  const videoRef = useRef(null);
+  const { scrollYProgress } = useScroll();
+  const opacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+  const scale = useTransform(scrollYProgress, [0, 0.3], [1, 1.1]);
 
+  // Section refs with enhanced animations
+  const [heroRef, heroInView] = useInView({ triggerOnce: true, threshold: 0.2 });
+  const [featuresRef, featuresInView] = useInView({ triggerOnce: true, threshold: 0.1 });
+  const [categoriesRef, categoriesInView] = useInView({ triggerOnce: true, threshold: 0.1 });
+  const [statsRef, statsInView] = useInView({ triggerOnce: true, threshold: 0.2 });
+  const [benefitsRef, benefitsInView] = useInView({ triggerOnce: true, threshold: 0.1 });
+  const [ctaRef, ctaInView] = useInView({ triggerOnce: true, threshold: 0.2 });
+
+  // Video autoplay handling
   useEffect(() => {
-    fetchFeaturedListings();
+    if (videoRef.current) {
+      const video = videoRef.current;
+      
+      const playVideo = async () => {
+        try {
+          await video.play();
+        } catch (error) {
+          const playOnInteraction = () => {
+            video.play().catch(() => {});
+            document.removeEventListener('click', playOnInteraction);
+            document.removeEventListener('touchstart', playOnInteraction);
+          };
+          document.addEventListener('click', playOnInteraction);
+          document.addEventListener('touchstart', playOnInteraction);
+        }
+      };
+
+      video.addEventListener('loadedmetadata', playVideo);
+      return () => video.removeEventListener('loadedmetadata', playVideo);
+    }
   }, []);
 
-  const fetchFeaturedListings = async () => {
-    try {
-      const listingsRef = collection(db, 'listings');
-      const q = query(
-        listingsRef,
-        where('status', '==', 'active'),
-        limit(6)
-      );
-      const querySnapshot = await getDocs(q);
-      const listings = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setFeaturedListings(listings);
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-    } finally {
-      setLoading(false);
+  const features = [
+    {
+      icon: FaHome,
+      title: "Verified Listings",
+      description: "All properties verified for quality and safety",
+      color: "text-emerald-500"
+    },
+    {
+      icon: FaCalendarCheck,
+      title: "Instant Booking",
+      description: "Book your stay in just a few clicks",
+      color: "text-blue-500"
+    },
+    {
+      icon: FaShieldAlt,
+      title: "Secure Payments",
+      description: "Your transactions are safe with us",
+      color: "text-purple-500"
+    },
+    {
+      icon: FaStar,
+      title: "Top Rated",
+      description: "4.9 average rating from guests",
+      color: "text-yellow-500"
     }
-  };
+  ];
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    const searchParams = new URLSearchParams();
-    if (location) searchParams.append('location', location);
-    if (checkIn) searchParams.append('checkIn', checkIn);
-    if (checkOut) searchParams.append('checkOut', checkOut);
-    if (guests) searchParams.append('guests', guests);
-    navigate(`/listings?${searchParams.toString()}`);
-  };
-
-  const handleNewsletterSubmit = (e) => {
-    e.preventDefault();
-    // TODO: Implement newsletter subscription logic
-    setSubscribeSuccess(true);
-    setEmail('');
-    setTimeout(() => setSubscribeSuccess(false), 3000);
-  };
-
-  const fadeInUp = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6 }
-  };
-
-  const staggerContainer = {
-    animate: {
-      transition: {
-        staggerChildren: 0.1
-      }
+  const categories = [
+    {
+      icon: FaUmbrellaBeach,
+      title: "Beach Escapes",
+      description: "Sun, sand, and sea",
+      image: "from-blue-500 to-cyan-500",
+      route: "/homestays?category=beach"
+    },
+    {
+      icon: FaCity,
+      title: "City Stays",
+      description: "Urban adventures await",
+      image: "from-purple-500 to-pink-500",
+      route: "/homestays?category=city"
+    },
+    {
+      icon: FaMountain,
+      title: "Mountain Retreats",
+      description: "Peace in the highlands",
+      image: "from-green-500 to-emerald-500",
+      route: "/homestays?category=countryside"
+    },
+    {
+      icon: FaUtensils,
+      title: "Local Services",
+      description: "Authentic experiences",
+      image: "from-orange-500 to-red-500",
+      route: "/services"
     }
-  };
+  ];
+
+  const stats = [
+    { value: "200+", label: "Properties" },
+    { value: "1000+", label: "Happy Guests" },
+    { value: "4.9", label: "Avg Rating" },
+    { value: "50+", label: "Locations" }
+  ];
+
+  const benefits = [
+    "No booking fees for guests",
+    "24/7 customer support",
+    "Flexible cancellation",
+    "Best price guarantee",
+    "Verified host profiles",
+    "Instant confirmation"
+  ];
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm shadow-md z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => navigate('/')}
+      {/* Hero Section */}
+      <motion.section 
+        ref={heroRef}
+        className="relative h-screen flex items-center justify-center overflow-hidden"
+      >
+        {/* Background Video */}
+        <motion.div 
+          className="absolute inset-0 z-0"
+          style={{ scale }}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          >
+            <source src={heroVideo} type="video/webm" />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/40 to-black/60"></div>
+        </motion.div>
+
+        {/* Hero Content */}
+        <motion.div 
+          style={{ opacity }}
+          className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={heroInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 mb-6"
+          >
+            <FaStar className="w-4 h-4 text-yellow-400" />
+            <span className="text-sm font-medium text-white">Trusted by Thousands</span>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 30 }}
+            animate={heroInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold text-white mb-6 leading-tight"
+          >
+            Your Perfect
+            <span className="block bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mt-2">
+              Escape Awaits
+            </span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={heroInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="text-base sm:text-lg md:text-xl text-gray-200 mb-8 max-w-2xl mx-auto"
+          >
+            Discover unique homestays, unforgettable experiences, and local services across the Philippines
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={heroInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8, delay: 0.8 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+          >
+            <button
+              onClick={() => navigate('/homestays')}
+              className="group px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center">
-                <FaHome className="text-white text-xl" />
-              </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
-                Zennest
+              Explore Stays
+              <FaArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+            <button
+              onClick={() => navigate('/host/register')}
+              className="px-8 py-4 border-2 border-white text-white font-semibold rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm"
+            >
+              Become a Host
+            </button>
+          </motion.div>
+        </motion.div>
+
+        {/* Scroll Indicator */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2 }}
+          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
+        >
+          <motion.img
+            src="/src/assets/zennest-loading-icon.svg"
+            alt="Scroll"
+            animate={{ y: [0, 10, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
+          />
+        </motion.div>
+
+        {/* Wave Divider */}
+        <img
+          src={waveSvg}
+          alt="Wave divider"
+          className="absolute left-0 w-full bottom-[-2px] pointer-events-none z-20"
+        />
+      </motion.section>
+
+      {/* Features Section */}
+      <section ref={featuresRef} className="relative py-16 sm:py-20 lg:py-28 bg-gradient-to-br from-slate-50 via-white to-emerald-50 overflow-hidden">
+        {/* Decorative Elements */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-200/20 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-cyan-200/20 rounded-full blur-3xl"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={featuresInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-16"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={featuresInView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="inline-block mb-4"
+            >
+              <span className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-semibold">
+                <FaStar className="w-4 h-4" />
+                Premium Service
               </span>
             </motion.div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-gray-900 mb-4">
+              Why Choose Zennest
+            </h2>
+            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+              Experience seamless booking with trusted hosts and verified properties
+            </p>
+          </motion.div>
 
-            {/* Navigation Links */}
-            <div className="hidden md:flex items-center gap-6">
-              <button
-                onClick={() => navigate('/listings')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Explore
-              </button>
-              <button
-                onClick={() => navigate('/experiences')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Experiences
-              </button>
-              <button
-                onClick={() => {
-                  const section = document.getElementById('how-it-works');
-                  section?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                How It Works
-              </button>
-              <button
-                onClick={() => navigate('/login')}
-                className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => navigate('/signup')}
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg font-semibold hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-md hover:shadow-lg"
-              >
-                Sign Up
-              </button>
-            </div>
-
-            {/* Mobile Menu Button */}
-            <button className="md:hidden p-2">
-              <div className="w-6 h-0.5 bg-gray-700 mb-1.5"></div>
-              <div className="w-6 h-0.5 bg-gray-700 mb-1.5"></div>
-              <div className="w-6 h-0.5 bg-gray-700"></div>
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="relative pt-24 pb-20 md:pt-32 md:pb-28 bg-gradient-to-br from-emerald-50 via-white to-blue-50 overflow-hidden">
-        {/* Background Decorations */}
-        <div className="absolute top-0 left-0 w-72 h-72 bg-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-        <div className="absolute top-0 right-0 w-72 h-72 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <motion.h1
-              {...fadeInUp}
-              className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6"
-            >
-              Discover Your Perfect
-              <span className="block bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent mt-2">
-                Philippine Homestay
-              </span>
-            </motion.h1>
-            <motion.p
-              {...fadeInUp}
-              transition={{ delay: 0.2 }}
-              className="text-lg sm:text-xl text-gray-600 max-w-3xl mx-auto"
-            >
-              Experience authentic Filipino hospitality. Book unique homes, villas, and experiences
-              across the beautiful islands of the Philippines.
-            </motion.p>
-          </div>
-
-          {/* Search Bar */}
-          <motion.div
-            {...fadeInUp}
-            transition={{ delay: 0.4 }}
-            className="max-w-5xl mx-auto"
-          >
-            <form
-              onSubmit={handleSearch}
-              className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-4 md:p-6"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Location */}
-                <div className="relative">
-                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                    Location
-                  </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+            {features.map((feature, idx) => {
+              const Icon = feature.icon;
+              return (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                  animate={featuresInView ? { opacity: 1, y: 0, scale: 1 } : {}}
+                  transition={{ 
+                    duration: 0.7, 
+                    delay: 0.3 + idx * 0.15,
+                    type: "spring",
+                    stiffness: 100
+                  }}
+                  whileHover={{ 
+                    y: -10, 
+                    scale: 1.05,
+                    transition: { duration: 0.2 }
+                  }}
+                  className="group relative bg-white rounded-3xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100"
+                >
+                  {/* Gradient background on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-cyan-50 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  
                   <div className="relative">
-                    <FaMapMarkerAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-                    <input
-                      type="text"
-                      placeholder="Where to?"
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-
-                {/* Check In */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                    Check In
-                  </label>
-                  <div className="relative">
-                    <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-                    <input
-                      type="date"
-                      value={checkIn}
-                      onChange={(e) => setCheckIn(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-
-                {/* Check Out */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                    Check Out
-                  </label>
-                  <div className="relative">
-                    <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-                    <input
-                      type="date"
-                      value={checkOut}
-                      onChange={(e) => setCheckOut(e.target.value)}
-                      min={checkIn || new Date().toISOString().split('T')[0]}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-
-                {/* Guests */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
-                    Guests
-                  </label>
-                  <div className="relative">
-                    <FaUsers className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600" />
-                    <select
-                      value={guests}
-                      onChange={(e) => setGuests(Number(e.target.value))}
-                      className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none transition-colors appearance-none"
+                    <motion.div 
+                      className={`${feature.color} mb-5 inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100 group-hover:from-emerald-50 group-hover:to-cyan-50 transition-all duration-300`}
+                      whileHover={{ rotate: [0, -10, 10, -10, 0], transition: { duration: 0.5 } }}
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                        <option key={num} value={num}>{num} {num === 1 ? 'Guest' : 'Guests'}</option>
-                      ))}
-                    </select>
+                      <Icon className="w-8 h-8" />
+                    </motion.div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {feature.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">
+                      {feature.description}
+                    </p>
                   </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-6 px-8 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-semibold text-lg hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-3 group"
-              >
-                <FaSearch className="group-hover:scale-110 transition-transform" />
-                Search Homestays
-                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-              </button>
-            </form>
-          </motion.div>
-
-          {/* Quick Stats */}
-          <motion.div
-            {...fadeInUp}
-            transition={{ delay: 0.6 }}
-            className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto"
-          >
-            {[
-              { number: '10,000+', label: 'Homestays' },
-              { number: '50,000+', label: 'Happy Guests' },
-              { number: '7,107', label: 'Islands' },
-              { number: '4.9★', label: 'Average Rating' }
-            ].map((stat, idx) => (
-              <div key={idx} className="text-center">
-                <p className="text-3xl font-bold text-emerald-600">{stat.number}</p>
-                <p className="text-gray-600 mt-1">{stat.label}</p>
-              </div>
-            ))}
-          </motion.div>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      {/* Featured Listings */}
-      <section className="py-20 bg-white">
+      {/* Categories Section */}
+      <section ref={categoriesRef} className="py-16 sm:py-20 lg:py-28 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <motion.h2
-              {...fadeInUp}
-              className="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
-            >
-              Featured Homestays
-            </motion.h2>
-            <motion.p
-              {...fadeInUp}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 max-w-2xl mx-auto"
-            >
-              Handpicked properties offering the best of Filipino hospitality
-            </motion.p>
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-gray-200 h-64 rounded-2xl mb-4"></div>
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              ))}
-            </div>
-          ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={categoriesInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-16"
+          >
             <motion.div
-              variants={staggerContainer}
-              initial="initial"
-              whileInView="animate"
-              viewport={{ once: true }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={categoriesInView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="inline-block mb-4"
             >
-              {featuredListings.map((listing, idx) => (
+              <span className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-100 to-cyan-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-semibold">
+                <FaHome className="w-4 h-4" />
+                Discover Your Escape
+              </span>
+            </motion.div>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-gray-900 mb-4">
+              Explore Categories
+            </h2>
+            <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+              Find the perfect stay for your next adventure
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {categories.map((category, idx) => {
+              const Icon = category.icon;
+              return (
                 <motion.div
-                  key={listing.id}
-                  variants={fadeInUp}
-                  onClick={() => navigate(`/listing/${listing.id}`)}
-                  className="group cursor-pointer bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300 border border-gray-200"
+                  key={category.title}
+                  initial={{ opacity: 0, y: 60, scale: 0.8 }}
+                  animate={categoriesInView ? { opacity: 1, y: 0, scale: 1 } : {}}
+                  transition={{ 
+                    duration: 0.7, 
+                    delay: 0.2 + idx * 0.15,
+                    type: "spring",
+                    stiffness: 80
+                  }}
+                  whileHover={{ 
+                    scale: 1.05,
+                    y: -10,
+                    transition: { duration: 0.3 }
+                  }}
+                  onClick={() => navigate(category.route)}
+                  className="group relative overflow-hidden rounded-3xl cursor-pointer h-72 shadow-xl hover:shadow-2xl transition-all duration-500"
                 >
-                  <div className="relative h-64 overflow-hidden">
-                    <img
-                      src={listing.images?.[0] || 'https://via.placeholder.com/400x300'}
-                      alt={listing.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    {listing.discount > 0 && (
-                      <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                        {listing.discount}% OFF
-                      </div>
-                    )}
-                    <button className="absolute top-4 left-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors">
-                      <FaHeart className="text-gray-600 hover:text-red-500" />
-                    </button>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${category.image} opacity-90 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-all duration-500"></div>
+                  
+                  {/* Animated overlay pattern */}
+                  <motion.div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-20"
+                    initial={{ scale: 0, rotate: 0 }}
+                    whileHover={{ scale: 1.5, rotate: 45 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-white to-transparent"></div>
+                  </motion.div>
+                  
+                  <div className="relative h-full flex flex-col items-center justify-center text-white p-6">
+                    <motion.div
+                      whileHover={{ scale: 1.2, rotate: [0, -5, 5, 0] }}
+                      transition={{ duration: 0.5 }}
+                      className="mb-5 bg-white/20 backdrop-blur-sm rounded-2xl p-4"
+                    >
+                      <Icon className="w-12 h-12" />
+                    </motion.div>
+                    <h3 className="text-xl font-semibold mb-2">{category.title}</h3>
+                    <p className="text-sm text-white/90 mb-4">{category.description}</p>
+                    <motion.div
+                      className="flex items-center gap-2 font-semibold text-sm"
+                      initial={{ x: -10, opacity: 0 }}
+                      whileHover={{ x: 0, opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <span>Explore</span>
+                      <FaArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
+                    </motion.div>
                   </div>
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-gray-900 text-lg truncate flex-1">
-                        {listing.title}
-                      </h3>
-                      <div className="flex items-center gap-1 text-sm">
-                        <FaStar className="text-yellow-400 fill-current" />
-                        <span className="font-semibold">{listing.rating?.toFixed(1) || '5.0'}</span>
-                      </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section ref={statsRef} className="relative py-20 sm:py-24 bg-gradient-to-br from-emerald-600 via-emerald-500 to-cyan-600 overflow-hidden">
+        {/* Animated Background Pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-1/4 w-72 h-72 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-cyan-300 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={statsInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-3xl sm:text-4xl font-semibold text-white mb-3">
+              Trusted Worldwide
+            </h2>
+            <p className="text-emerald-100 text-base sm:text-lg">
+              Join thousands of happy guests and hosts
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+            {stats.map((stat, idx) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 50, scale: 0.5 }}
+                animate={statsInView ? { opacity: 1, y: 0, scale: 1 } : {}}
+                transition={{ 
+                  duration: 0.8, 
+                  delay: idx * 0.15,
+                  type: "spring",
+                  stiffness: 100
+                }}
+                whileHover={{ 
+                  scale: 1.1,
+                  transition: { duration: 0.2 }
+                }}
+                className="text-center group"
+              >
+                <motion.div 
+                  className="relative inline-block"
+                  whileHover={{ rotate: [0, -5, 5, 0] }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl group-hover:bg-white/30 transition-all duration-300"></div>
+                  <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl px-8 py-6 group-hover:bg-white/20 transition-all duration-300">
+                    <div className="text-5xl sm:text-6xl font-semibold text-white mb-2">
+                      {stat.value}
                     </div>
-                    <p className="text-gray-600 text-sm mb-3 flex items-center gap-2">
-                      <FaMapMarkerAlt className="text-emerald-600" />
-                      {listing.location}
-                    </p>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                      {listing.bedrooms && (
-                        <span className="flex items-center gap-1">
-                          <FaBed /> {listing.bedrooms}
-                        </span>
-                      )}
-                      {listing.bathrooms && (
-                        <span className="flex items-center gap-1">
-                          <FaBath /> {listing.bathrooms}
-                        </span>
-                      )}
-                      {listing.guests && (
-                        <span className="flex items-center gap-1">
-                          <FaUsers /> {listing.guests}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-semibold text-gray-900">
-                        ₱{listing.rate?.toLocaleString()}
-                      </span>
-                      <span className="text-gray-600">/ night</span>
+                    <div className="text-sm sm:text-base text-white/90 font-medium">
+                      {stat.label}
                     </div>
                   </div>
                 </motion.div>
-              ))}
-            </motion.div>
-          )}
-
-          <div className="text-center mt-12">
-            <button
-              onClick={() => navigate('/listings')}
-              className="px-8 py-4 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 transition-colors shadow-lg hover:shadow-xl inline-flex items-center gap-2 group"
-            >
-              View All Listings
-              <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <motion.h2
-              {...fadeInUp}
-              className="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
-            >
-              How Zennest Works
-            </motion.h2>
-            <motion.p
-              {...fadeInUp}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 max-w-2xl mx-auto"
-            >
-              Book your dream homestay in three simple steps
-            </motion.p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            {[
-              {
-                icon: FaSearch,
-                title: 'Search & Discover',
-                description: 'Browse thousands of verified homestays across the Philippines. Filter by location, price, amenities, and more.',
-                color: 'from-blue-500 to-blue-600'
-              },
-              {
-                icon: FaCalendarAlt,
-                title: 'Book Instantly',
-                description: 'Select your dates, choose your perfect stay, and book instantly with secure payment. No waiting, no hassle.',
-                color: 'from-emerald-500 to-emerald-600'
-              },
-              {
-                icon: FaHome,
-                title: 'Enjoy Your Stay',
-                description: 'Check in, relax, and experience authentic Filipino hospitality. Our hosts are ready to welcome you home.',
-                color: 'from-purple-500 to-purple-600'
-              }
-            ].map((step, idx) => (
-              <motion.div
-                key={idx}
-                {...fadeInUp}
-                transition={{ delay: idx * 0.2 }}
-                className="relative"
-              >
-                <div className="text-center">
-                  <div className={`w-20 h-20 bg-gradient-to-br ${step.color} rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg`}>
-                    <step.icon className="text-white text-3xl" />
-                  </div>
-                  <div className="absolute top-8 left-1/2 -translate-x-1/2 w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold text-2xl text-gray-400 border-4 border-white shadow-md">
-                    {idx + 1}
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-4">
-                    {step.title}
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    {step.description}
-                  </p>
-                </div>
-                {idx < 2 && (
-                  <div className="hidden md:block absolute top-10 left-full w-full h-0.5 bg-gradient-to-r from-gray-300 to-transparent -translate-x-1/2"></div>
-                )}
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Why Choose Zennest */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <motion.h2
-              {...fadeInUp}
-              className="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
-            >
-              Why Choose Zennest?
-            </motion.h2>
-            <motion.p
-              {...fadeInUp}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 max-w-2xl mx-auto"
-            >
-              We're committed to providing the best homestay experience in the Philippines
-            </motion.p>
-          </div>
+      {/* Benefits Section */}
+      <section ref={benefitsRef} className="relative py-16 sm:py-20 lg:py-28 bg-gradient-to-br from-slate-50 via-emerald-50/30 to-cyan-50/30 overflow-hidden">
+        {/* Decorative Elements */}
+        <div className="absolute top-1/4 right-0 w-96 h-96 bg-emerald-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 left-0 w-96 h-96 bg-cyan-200/30 rounded-full blur-3xl"></div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {[
-              {
-                icon: FaUserShield,
-                title: 'Verified Hosts',
-                description: 'All hosts are verified with background checks for your safety and peace of mind.'
-              },
-              {
-                icon: FaCreditCard,
-                title: 'Secure Payments',
-                description: 'Your payment information is encrypted and protected with industry-leading security.'
-              },
-              {
-                icon: FaHeadset,
-                title: '24/7 Support',
-                description: 'Our customer support team is always ready to help you anytime, anywhere.'
-              },
-              {
-                icon: FaAward,
-                title: 'Best Price Guarantee',
-                description: 'Find the best deals on homestays with our price match guarantee.'
-              }
-            ].map((benefit, idx) => (
-              <motion.div
-                key={idx}
-                {...fadeInUp}
-                transition={{ delay: idx * 0.1 }}
-                className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-6 hover:shadow-xl transition-shadow border border-gray-200"
-              >
-                <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center mb-4">
-                  <benefit.icon className="text-white text-2xl" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {benefit.title}
-                </h3>
-                <p className="text-gray-600 text-sm leading-relaxed">
-                  {benefit.description}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Become a Host CTA */}
-      <section className="py-20 bg-gradient-to-br from-emerald-600 to-emerald-800 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yLjIxLTEuNzktNC00LTRzLTQgMS43OS00IDQgMS43OSA0IDQgNCA0LTEuNzkgNC00em0wLTEwYzAtMi4yMS0xLjc5LTQtNC00cy00IDEuNzktNCA0IDEuNzkgNCA0IDQgNC0xLjc5IDQtNHoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-10"></div>
-        
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <motion.div
-              {...fadeInUp}
+              initial={{ opacity: 0, x: -50 }}
+              animate={benefitsInView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.8 }}
             >
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
-                Become a Zennest Host
-              </h2>
-              <p className="text-emerald-50 text-lg mb-8 leading-relaxed">
-                Share your space, earn extra income, and connect with travelers from around the world. 
-                Join thousands of hosts who are already earning with Zennest.
-              </p>
-              <ul className="space-y-4 mb-8">
-                {[
-                  'Earn up to ₱50,000+ per month',
-                  'Full control over your pricing and availability',
-                  'Free host protection insurance',
-                  '24/7 host support and guidance'
-                ].map((item, idx) => (
-                  <li key={idx} className="flex items-center gap-3 text-white">
-                    <FaCheckCircle className="text-emerald-300 flex-shrink-0" />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => navigate('/become-host')}
-                className="px-8 py-4 bg-white text-emerald-700 rounded-xl font-semibold hover:bg-emerald-50 transition-all shadow-lg hover:shadow-xl inline-flex items-center gap-3 group"
-              >
-                <FaRocket />
-                Start Hosting Today
-                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-              </button>
-            </motion.div>
-
-            <motion.div
-              {...fadeInUp}
-              transition={{ delay: 0.3 }}
-              className="grid grid-cols-2 gap-6"
-            >
-              {[
-                { icon: FaHandshake, text: 'Easy Setup', color: 'from-blue-500 to-blue-600' },
-                { icon: FaShieldAlt, text: 'Secure Platform', color: 'from-purple-500 to-purple-600' },
-                { icon: FaAward, text: 'Top Ratings', color: 'from-pink-500 to-pink-600' },
-                { icon: FaRocket, text: 'Fast Earnings', color: 'from-orange-500 to-orange-600' }
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-center hover:bg-white/20 transition-colors border border-white/20"
-                >
-                  <div className={`w-16 h-16 bg-gradient-to-br ${item.color} rounded-xl flex items-center justify-center mx-auto mb-4`}>
-                    <item.icon className="text-white text-2xl" />
-                  </div>
-                  <p className="text-white font-semibold">{item.text}</p>
-                </div>
-              ))}
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <motion.h2
-              {...fadeInUp}
-              className="text-3xl md:text-4xl font-bold text-gray-900 mb-4"
-            >
-              What Our Guests Say
-            </motion.h2>
-            <motion.p
-              {...fadeInUp}
-              transition={{ delay: 0.2 }}
-              className="text-lg text-gray-600 max-w-2xl mx-auto"
-            >
-              Real experiences from real travelers
-            </motion.p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              {
-                name: 'Maria Santos',
-                location: 'Manila',
-                rating: 5,
-                text: 'Amazing experience! The host was incredibly welcoming and the place was exactly as shown. Highly recommend Zennest for anyone looking for authentic Filipino hospitality.',
-                avatar: 'MS'
-              },
-              {
-                name: 'John Reyes',
-                location: 'Cebu',
-                rating: 5,
-                text: 'Booked a beachfront villa for our family vacation. The booking process was smooth, and the property exceeded our expectations. Will definitely use Zennest again!',
-                avatar: 'JR'
-              },
-              {
-                name: 'Ana Cruz',
-                location: 'Palawan',
-                rating: 5,
-                text: 'Best homestay platform in the Philippines! Found the perfect place for our honeymoon. The support team was also very helpful when we had questions.',
-                avatar: 'AC'
-              }
-            ].map((testimonial, idx) => (
               <motion.div
-                key={idx}
-                {...fadeInUp}
-                transition={{ delay: idx * 0.2 }}
-                className="bg-gradient-to-br from-slate-50 to-blue-50 rounded-2xl p-8 hover:shadow-xl transition-shadow border border-gray-200"
+                initial={{ opacity: 0, y: 20 }}
+                animate={benefitsInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="inline-block mb-6"
               >
-                <FaQuoteLeft className="text-emerald-600 text-3xl mb-4 opacity-50" />
-                <p className="text-gray-700 mb-6 leading-relaxed">
-                  {testimonial.text}
-                </p>
-                <div className="flex items-center gap-1 mb-4">
-                  {[...Array(testimonial.rating)].map((_, i) => (
-                    <FaStar key={i} className="text-yellow-400 fill-current" />
-                  ))}
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center text-white font-semibold">
-                    {testimonial.avatar}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">{testimonial.name}</p>
-                    <p className="text-sm text-gray-600">{testimonial.location}</p>
-                  </div>
-                </div>
+                <span className="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 px-4 py-2 rounded-full text-sm font-semibold">
+                  <FaCheckCircle className="w-4 h-4" />
+                  Guest Perks
+                </span>
               </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      {/* Newsletter */}
-      <section className="py-20 bg-gradient-to-br from-slate-50 to-blue-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div {...fadeInUp}>
-            <FaPaperPlane className="text-5xl text-emerald-600 mx-auto mb-6" />
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Stay Updated
-            </h2>
-            <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-              Subscribe to our newsletter for exclusive deals, travel tips, and the latest homestay listings
-            </p>
-            
-            <form onSubmit={handleNewsletterSubmit} className="max-w-md mx-auto">
-              <div className="flex gap-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="flex-1 px-6 py-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="px-8 py-4 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl font-semibold hover:from-emerald-700 hover:to-emerald-800 transition-all shadow-lg hover:shadow-xl"
-                >
-                  Subscribe
-                </button>
-              </div>
-              {subscribeSuccess && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-4 text-emerald-600 font-semibold flex items-center justify-center gap-2"
-                >
-                  <FaCheckCircle /> Successfully subscribed!
-                </motion.p>
-              )}
-            </form>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-gray-300 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            {/* Brand */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center">
-                  <FaHome className="text-white text-xl" />
-                </div>
-                <span className="text-2xl font-bold text-white">Zennest</span>
-              </div>
-              <p className="text-sm mb-4">
-                Your trusted platform for discovering authentic Philippine homestays and experiences.
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-gray-900 mb-6">
+                Guest Benefits
+              </h2>
+              <p className="text-base sm:text-lg text-gray-600 mb-10">
+                Enjoy a hassle-free booking experience with exclusive perks
               </p>
-              <div className="flex gap-3">
-                {[
-                  { icon: FaFacebook, link: '#' },
-                  { icon: FaTwitter, link: '#' },
-                  { icon: FaInstagram, link: '#' },
-                  { icon: FaYoutube, link: '#' }
-                ].map((social, idx) => (
-                  <a
-                    key={idx}
-                    href={social.link}
-                    className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors"
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {benefits.map((benefit, idx) => (
+                  <motion.div
+                    key={benefit}
+                    initial={{ opacity: 0, x: -30, scale: 0.9 }}
+                    animate={benefitsInView ? { opacity: 1, x: 0, scale: 1 } : {}}
+                    transition={{ 
+                      duration: 0.6, 
+                      delay: 0.4 + idx * 0.1,
+                      type: "spring",
+                      stiffness: 100
+                    }}
+                    whileHover={{ 
+                      x: 5,
+                      transition: { duration: 0.2 }
+                    }}
+                    className="flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 group"
                   >
-                    <social.icon className="text-lg" />
-                  </a>
+                    <motion.div
+                      whileHover={{ scale: 1.2, rotate: 360 }}
+                      transition={{ duration: 0.5 }}
+                      className="flex-shrink-0"
+                    >
+                      <FaCheckCircle className="w-5 h-5 text-emerald-600 group-hover:text-emerald-700" />
+                    </motion.div>
+                    <span className="text-sm font-medium text-gray-700">{benefit}</span>
+                  </motion.div>
                 ))}
               </div>
-            </div>
+            </motion.div>
 
-            {/* Company */}
-            <div>
-              <h3 className="font-semibold text-white mb-4">Company</h3>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">About Us</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Careers</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Press</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Blog</a></li>
-              </ul>
-            </div>
-
-            {/* Support */}
-            <div>
-              <h3 className="font-semibold text-white mb-4">Support</h3>
-              <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Help Center</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Safety Information</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Cancellation Options</a></li>
-                <li><a href="#" className="hover:text-emerald-400 transition-colors">Contact Us</a></li>
-              </ul>
-            </div>
-
-            {/* Contact */}
-            <div>
-              <h3 className="font-semibold text-white mb-4">Contact</h3>
-              <ul className="space-y-3 text-sm">
-                <li className="flex items-center gap-2">
-                  <FaPhoneAlt className="text-emerald-400" />
-                  <span>+63 917 123 4567</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <FaEnvelope className="text-emerald-400" />
-                  <span>support@zennest.ph</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <FaGlobe className="text-emerald-400" />
-                  <span>www.zennest.ph</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Bottom Footer */}
-          <div className="border-t border-gray-800 pt-8">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <p className="text-sm">
-                © 2024 Zennest. All rights reserved.
-              </p>
-              <div className="flex gap-6 text-sm">
-                <a href="#" className="hover:text-emerald-400 transition-colors">Privacy Policy</a>
-                <a href="#" className="hover:text-emerald-400 transition-colors">Terms of Service</a>
-                <a href="#" className="hover:text-emerald-400 transition-colors">Cookie Policy</a>
+            <motion.div
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={benefitsInView ? { opacity: 1, x: 0, scale: 1 } : {}}
+              transition={{ duration: 0.8, delay: 0.3 }}
+              whileHover={{ scale: 1.02, y: -5 }}
+              className="relative bg-gradient-to-br from-emerald-500 via-emerald-600 to-cyan-600 rounded-3xl p-10 text-white shadow-2xl overflow-hidden"
+            >
+              {/* Animated background pattern */}
+              <div className="absolute inset-0 opacity-20">
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.2, 1],
+                    rotate: [0, 90, 0]
+                  }}
+                  transition={{ 
+                    duration: 20,
+                    repeat: Infinity,
+                    ease: "linear"
+                  }}
+                  className="absolute -top-1/2 -right-1/2 w-full h-full bg-gradient-to-br from-white to-transparent rounded-full"
+                ></motion.div>
               </div>
-            </div>
+
+              <div className="relative">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={benefitsInView ? { scale: 1 } : {}}
+                  transition={{ duration: 0.5, delay: 0.6 }}
+                  className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl mb-6"
+                >
+                  <FaStar className="w-8 h-8 text-white" />
+                </motion.div>
+
+                <h3 className="text-2xl sm:text-3xl font-semibold mb-4">
+                  Ready to Start?
+                </h3>
+                <p className="text-base mb-8 text-white/90 leading-relaxed">
+                  Join thousands of satisfied guests who found their perfect stay with us
+                </p>
+                
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate('/homestays')}
+                  className="group w-full px-8 py-4 bg-white text-emerald-600 font-semibold rounded-xl hover:bg-emerald-50 transition-all duration-300 shadow-lg flex items-center justify-center gap-3"
+                >
+                  Browse Homestays
+                  <FaArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
+                </motion.button>
+              </div>
+            </motion.div>
           </div>
         </div>
-      </footer>
+      </section>
+
+      {/* CTA Section - Redesigned */}
+      <section ref={ctaRef} className="relative py-20 sm:py-24 lg:py-32 bg-white overflow-hidden">
+        {/* Decorative Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-white to-cyan-50"></div>
+        <div className="absolute top-0 left-0 w-full h-full opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-300 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyan-300 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Side - Content */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              animate={ctaInView ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.8 }}
+              className="text-center lg:text-left"
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={ctaInView ? { opacity: 1, scale: 1 } : {}}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                className="inline-block mb-6"
+              >
+                <span className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-100 to-cyan-100 text-emerald-700 px-5 py-2 rounded-full text-sm font-semibold">
+                  <FaHandHoldingUsd className="w-4 h-4" />
+                  Start Earning Today
+                </span>
+              </motion.div>
+
+              <h2 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-gray-900 mb-6 leading-tight">
+                Earn with Your
+                <span className="block bg-gradient-to-r from-emerald-600 to-cyan-600 bg-clip-text text-transparent mt-2">
+                  Property
+                </span>
+              </h2>
+              
+              <p className="text-base sm:text-lg text-gray-600 mb-10 leading-relaxed max-w-xl mx-auto lg:mx-0">
+                Join our community of successful hosts and turn your property into a thriving business. 
+                We'll support you every step of the way.
+              </p>
+
+              {/* Host Benefits */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
+                {[
+                  { icon: FaChartLine, text: "Maximize earnings" },
+                  { icon: FaUsers, text: "Reach more guests" },
+                  { icon: FaShieldAlt, text: "Host protection" },
+                  { icon: FaStar, text: "24/7 support" }
+                ].map((item, idx) => {
+                  const Icon = item.icon;
+                  return (
+                    <motion.div
+                      key={item.text}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={ctaInView ? { opacity: 1, y: 0 } : {}}
+                      transition={{ duration: 0.6, delay: 0.4 + idx * 0.1 }}
+                      whileHover={{ x: 5 }}
+                      className="flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 group"
+                    >
+                      <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{item.text}</span>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={ctaInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.8, delay: 0.8 }}
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/host/register')}
+                className="group px-10 py-5 bg-gradient-to-r from-emerald-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-emerald-700 hover:to-cyan-700 transition-all duration-300 shadow-xl hover:shadow-2xl inline-flex items-center gap-3"
+              >
+                Start Hosting Today
+                <FaArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform duration-300" />
+              </motion.button>
+            </motion.div>
+
+            {/* Right Side - Visual Card */}
+            <motion.div
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={ctaInView ? { opacity: 1, x: 0, scale: 1 } : {}}
+              transition={{ duration: 0.8, delay: 0.3 }}
+              className="relative"
+            >
+              <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-cyan-500 rounded-3xl p-10 lg:p-12 shadow-2xl overflow-hidden">
+                {/* Animated Pattern */}
+                <div className="absolute inset-0 opacity-20">
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.5, 1],
+                      rotate: [0, 180, 360]
+                    }}
+                    transition={{ 
+                      duration: 25,
+                      repeat: Infinity,
+                      ease: "linear"
+                    }}
+                    className="absolute -top-1/2 -right-1/2 w-full h-full"
+                  >
+                    <div className="w-full h-full bg-gradient-to-br from-white to-transparent rounded-full"></div>
+                  </motion.div>
+                </div>
+
+                <div className="relative">
+                  {/* Stats Cards */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={ctaInView ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.6, delay: 0.5 }}
+                    className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 mb-6"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-white/80 text-sm font-medium">Average Monthly Earnings</span>
+                      <FaChartLine className="w-5 h-5 text-white/80" />
+                    </div>
+                    <div className="text-4xl font-semibold text-white mb-1">$2,500+</div>
+                    <div className="text-emerald-200 text-sm">Per property</div>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={ctaInView ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.6, delay: 0.7 }}
+                    className="grid grid-cols-2 gap-4"
+                  >
+                    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5">
+                      <div className="text-3xl font-semibold text-white mb-2">500+</div>
+                      <div className="text-white/80 text-sm">Active Hosts</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-5">
+                      <div className="text-3xl font-semibold text-white mb-2">4.8★</div>
+                      <div className="text-white/80 text-sm">Host Rating</div>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={ctaInView ? { opacity: 1, scale: 1 } : {}}
+                    transition={{ duration: 0.6, delay: 0.9 }}
+                    className="mt-8 text-center"
+                  >
+                    <p className="text-white/90 text-sm italic">
+                      "Best platform to host my properties. Easy to use and great support!"
+                    </p>
+                    <p className="text-white/70 text-xs mt-2">- Maria S., Superhost</p>
+                  </motion.div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
 
 export default LandingPage;
+

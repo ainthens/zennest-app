@@ -91,39 +91,39 @@ const Footer = () => {
   return (
     <footer className="bg-gradient-to-br from-emerald-950 via-emerald-900 to-emerald-950 text-gray-200" style={{ fontFamily: 'Poppins, sans-serif' }}>
       {/* Main Footer Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-12">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-6 sm:py-8 lg:py-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 sm:gap-8 lg:gap-12">
           {/* Logo, Description, Newsletter & Contact */}
           <div className="lg:col-span-2">
-            <Link to="/" className="inline-block mb-4 group">
+            <Link to="/" className="inline-block mb-3 sm:mb-4 group">
               <motion.img
                 src={ZennestLogoV3}
                 alt="Zennest Logo"
-                className="h-12 w-auto group-hover:opacity-90 transition-opacity"
+                className="h-8 sm:h-10 lg:h-12 w-auto group-hover:opacity-90 transition-opacity"
                 whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 300 }}
               />
             </Link>
-            <p className="text-emerald-100 text-sm leading-relaxed mb-6 max-w-md">
+            <p className="text-emerald-100 text-xs sm:text-sm leading-relaxed mb-4 sm:mb-6 max-w-md">
               Discover unique home stays, unforgettable experiences, and exceptional services across the Philippines.
             </p>
             
             {/* Newsletter Signup */}
-            <div className="mb-6 p-5 bg-emerald-800/30 backdrop-blur-sm rounded-2xl border border-emerald-700/50">
-              <h3 className="text-white font-semibold mb-2 text-sm flex items-center gap-2">
-                <FaEnvelope className="text-emerald-300" />
+            <div className="mb-4 sm:mb-6 p-3 sm:p-4 lg:p-5 bg-emerald-800/30 backdrop-blur-sm rounded-xl sm:rounded-2xl border border-emerald-700/50">
+              <h3 className="text-white font-semibold mb-1.5 sm:mb-2 text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
+                <FaEnvelope className="text-emerald-300 text-xs sm:text-sm" />
                 Stay Updated
               </h3>
-              <p className="text-emerald-100 text-xs mb-3">
+              <p className="text-emerald-100 text-[10px] sm:text-xs mb-2 sm:mb-3">
                 Get exclusive deals and travel inspiration
               </p>
               {subscribed ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="flex items-center gap-2 text-emerald-300 font-semibold text-sm"
+                  className="flex items-center gap-1.5 sm:gap-2 text-emerald-300 font-semibold text-xs sm:text-sm"
                 >
-                  <FaCheckCircle /> Thanks for subscribing!
+                  <FaCheckCircle className="text-xs sm:text-sm" /> Thanks for subscribing!
                 </motion.div>
               ) : (
                 <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-2">
@@ -132,14 +132,14 @@ const Footer = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="flex-1 w-full px-4 py-2.5 rounded-xl bg-white/10 border border-emerald-600/50 text-white placeholder-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                    className="flex-1 w-full px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl bg-white/10 border border-emerald-600/50 text-white placeholder-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-xs sm:text-sm"
                     required
                   />
                   <motion.button
                     type="submit"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm transition-colors shadow-lg whitespace-nowrap"
+                    className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm transition-colors shadow-lg whitespace-nowrap"
                   >
                     Subscribe
                   </motion.button>
@@ -148,44 +148,44 @@ const Footer = () => {
             </div>
 
             {/* Contact Info */}
-            <div className="space-y-2">
+            <div className="space-y-1.5 sm:space-y-2">
               <a 
                 href="https://maps.google.com/?q=Manila,Philippines"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-start gap-3 text-sm p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-2"
+                className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm p-1.5 sm:p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-1.5 sm:-ml-2"
               >
-                <FaMapMarkerAlt className="text-emerald-300 mt-1 flex-shrink-0" />
+                <FaMapMarkerAlt className="text-emerald-300 mt-0.5 sm:mt-1 flex-shrink-0 text-xs sm:text-sm" />
                 <span className="text-emerald-100">Manila, Philippines</span>
               </a>
               <a 
                 href="tel:+63123456789" 
-                className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-2 active:bg-emerald-700/40"
+                className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-1.5 sm:p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-1.5 sm:-ml-2 active:bg-emerald-700/40"
               >
-                <div className="w-9 h-9 rounded-full bg-emerald-700/50 flex items-center justify-center flex-shrink-0">
-                  <FaPhone className="text-emerald-300 text-sm" />
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-emerald-700/50 flex items-center justify-center flex-shrink-0">
+                  <FaPhone className="text-emerald-300 text-xs sm:text-sm" />
                 </div>
                 <div>
-                  <div className="text-xs text-emerald-300">Call us</div>
-                  <div className="text-emerald-100 font-medium">+63 961 2469 245</div>
+                  <div className="text-[10px] sm:text-xs text-emerald-300">Call us</div>
+                  <div className="text-emerald-100 font-medium text-xs sm:text-sm">+63 961 2469 245</div>
                 </div>
               </a>
               <a 
                 href="mailto:info@zennest.com" 
-                className="flex items-center gap-3 text-sm p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-2 active:bg-emerald-700/40"
+                className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm p-1.5 sm:p-2 rounded-lg hover:bg-emerald-800/30 transition-colors -ml-1.5 sm:-ml-2 active:bg-emerald-700/40"
               >
-                <div className="w-9 h-9 rounded-full bg-emerald-700/50 flex items-center justify-center flex-shrink-0">
-                  <FaEnvelope className="text-emerald-300 text-sm" />
+                <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-emerald-700/50 flex items-center justify-center flex-shrink-0">
+                  <FaEnvelope className="text-emerald-300 text-xs sm:text-sm" />
                 </div>
                 <div>
-                  <div className="text-xs text-emerald-300">Email us</div>
-                  <div className="text-emerald-100 font-medium break-all">zennesrcorporation@gmail.com</div>
+                  <div className="text-[10px] sm:text-xs text-emerald-300">Email us</div>
+                  <div className="text-emerald-100 font-medium text-xs sm:text-sm break-all">zennesrcorporation@gmail.com</div>
                 </div>
               </a>
             </div>
 
             {/* Social Media Links */}
-            <div className="flex items-center gap-3 mt-6">
+            <div className="flex items-center gap-2 sm:gap-3 mt-4 sm:mt-6">
               {socialLinks.map((social) => {
                 const Icon = social.icon;
                 return (
@@ -195,13 +195,13 @@ const Footer = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     title={`Follow us on ${social.name}`}
-                    className={`w-10 h-10 rounded-full bg-emerald-800/50 backdrop-blur-sm flex items-center justify-center ${social.color} transition-all hover:bg-emerald-700/70 hover:scale-110 group relative`}
+                    className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-emerald-800/50 backdrop-blur-sm flex items-center justify-center ${social.color} transition-all hover:bg-emerald-700/70 hover:scale-110 group relative`}
                     whileHover={{ scale: 1.1, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                     aria-label={social.name}
                   >
-                    <Icon className="w-5 h-5" />
-                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-2 py-1 rounded text-[10px] sm:text-xs opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                       {social.name}
                     </span>
                   </motion.a>
@@ -212,16 +212,16 @@ const Footer = () => {
 
           {/* Desktop Navigation Links */}
           <div className="hidden lg:block">
-            <h3 className="text-white font-semibold mb-4 text-base flex items-center gap-2">
-              <FaHome className="text-emerald-300" />
+            <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base flex items-center gap-2">
+              <FaHome className="text-emerald-300 text-sm" />
               Explore
             </h3>
-            <ul className="space-y-3">
+            <ul className="space-y-2 sm:space-y-3">
               {footerLinks.explore.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.path}
-                    className="text-emerald-100 hover:text-white transition-colors text-sm flex items-center gap-2 group"
+                    className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm flex items-center gap-2 group"
                   >
                     <span className="group-hover:translate-x-1 transition-transform">{link.icon}</span>
                     <span>{link.name}</span>
@@ -232,16 +232,16 @@ const Footer = () => {
           </div>
 
           <div className="hidden lg:block">
-            <h3 className="text-white font-semibold mb-4 text-base flex items-center gap-2">
-              <FaInfoCircle className="text-emerald-300" />
+            <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base flex items-center gap-2">
+              <FaInfoCircle className="text-emerald-300 text-sm" />
               About
             </h3>
-            <ul className="space-y-3">
+            <ul className="space-y-2 sm:space-y-3">
               {footerLinks.about.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.path}
-                    className="text-emerald-100 hover:text-white transition-colors text-sm"
+                    className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm"
                   >
                     {link.name}
                   </Link>
@@ -251,38 +251,38 @@ const Footer = () => {
           </div>
 
           <div className="hidden lg:block">
-            <h3 className="text-white font-semibold mb-4 text-base flex items-center gap-2">
-              <FaQuestionCircle className="text-emerald-300" />
+            <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base flex items-center gap-2">
+              <FaQuestionCircle className="text-emerald-300 text-sm" />
               Support
             </h3>
-            <ul className="space-y-3 mb-6">
+            <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
               {footerLinks.support.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.path}
-                    className="text-emerald-100 hover:text-white transition-colors text-sm"
+                    className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm"
                   >
                     {link.name}
                   </Link>
                 </li>
               ))}
             </ul>
-            <h3 className="text-white font-semibold mb-4 text-base flex items-center gap-2">
-              <FaShieldAlt className="text-emerald-300" />
+            <h3 className="text-white font-semibold mb-3 sm:mb-4 text-sm sm:text-base flex items-center gap-2">
+              <FaShieldAlt className="text-emerald-300 text-sm" />
               Legal
             </h3>
-            <ul className="space-y-3">
+            <ul className="space-y-2 sm:space-y-3">
               {footerLinks.legal.map((link) => (
                 <li key={link.name}>
                   <Link
                     to={link.path}
-                    className={`text-emerald-100 hover:text-white transition-colors text-sm flex items-center gap-2 ${
+                    className={`text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm flex items-center gap-2 ${
                       link.highlight ? 'font-semibold' : ''
                     }`}
                   >
                     {link.name}
                     {link.highlight && (
-                      <span className="text-xs bg-emerald-600 text-white px-1.5 py-0.5 rounded-full">
+                      <span className="text-[10px] sm:text-xs bg-emerald-600 text-white px-1 sm:px-1.5 py-0.5 rounded-full">
                         ♿
                       </span>
                     )}
@@ -293,21 +293,21 @@ const Footer = () => {
           </div>
 
           {/* Mobile Accordion Navigation */}
-          <div className="lg:hidden space-y-4 md:col-span-2">
+          <div className="lg:hidden space-y-3 sm:space-y-4 md:col-span-2">
             {/* Explore Section */}
-            <div className="border-b border-emerald-800 pb-4">
+            <div className="border-b border-emerald-800 pb-3 sm:pb-4">
               <button
                 onClick={() => toggleSection("explore")}
-                className="flex items-center justify-between w-full text-left text-white font-semibold mb-3"
+                className="flex items-center justify-between w-full text-left text-white font-semibold mb-2 sm:mb-3 text-sm sm:text-base"
               >
-                <span className="flex items-center gap-2">
-                  <FaHome className="text-emerald-300" />
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <FaHome className="text-emerald-300 text-xs sm:text-sm" />
                   Explore
                 </span>
                 {expandedSection === "explore" ? (
-                  <FaChevronUp className="text-emerald-300" />
+                  <FaChevronUp className="text-emerald-300 text-xs sm:text-sm" />
                 ) : (
-                  <FaChevronDown className="text-emerald-200" />
+                  <FaChevronDown className="text-emerald-200 text-xs sm:text-sm" />
                 )}
               </button>
               <AnimatePresence>
@@ -316,14 +316,14 @@ const Footer = () => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="space-y-3"
+                    className="space-y-2 sm:space-y-3"
                   >
                     {footerLinks.explore.map((link) => (
                       <li key={link.name}>
                         <Link
                           to={link.path}
                           onClick={() => setExpandedSection(null)}
-                          className="text-emerald-100 hover:text-white transition-colors text-sm flex items-center gap-2"
+                          className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
                         >
                           {link.icon}
                           {link.name}
@@ -336,19 +336,19 @@ const Footer = () => {
             </div>
 
             {/* About Section */}
-            <div className="border-b border-emerald-800 pb-4">
+            <div className="border-b border-emerald-800 pb-3 sm:pb-4">
               <button
                 onClick={() => toggleSection("about")}
-                className="flex items-center justify-between w-full text-left text-white font-semibold mb-3"
+                className="flex items-center justify-between w-full text-left text-white font-semibold mb-2 sm:mb-3 text-sm sm:text-base"
               >
-                <span className="flex items-center gap-2">
-                  <FaInfoCircle className="text-emerald-300" />
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <FaInfoCircle className="text-emerald-300 text-xs sm:text-sm" />
                   About
                 </span>
                 {expandedSection === "about" ? (
-                  <FaChevronUp className="text-emerald-300" />
+                  <FaChevronUp className="text-emerald-300 text-xs sm:text-sm" />
                 ) : (
-                  <FaChevronDown className="text-emerald-200" />
+                  <FaChevronDown className="text-emerald-200 text-xs sm:text-sm" />
                 )}
               </button>
               <AnimatePresence>
@@ -357,14 +357,14 @@ const Footer = () => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="space-y-3"
+                    className="space-y-2 sm:space-y-3"
                   >
                     {footerLinks.about.map((link) => (
                       <li key={link.name}>
                         <Link
                           to={link.path}
                           onClick={() => setExpandedSection(null)}
-                          className="text-emerald-100 hover:text-white transition-colors text-sm"
+                          className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm"
                         >
                           {link.name}
                         </Link>
@@ -376,19 +376,19 @@ const Footer = () => {
             </div>
 
             {/* Support & Legal Combined for Mobile */}
-            <div className="border-b border-emerald-800 pb-4">
+            <div className="border-b border-emerald-800 pb-3 sm:pb-4">
               <button
                 onClick={() => toggleSection("support")}
-                className="flex items-center justify-between w-full text-left text-white font-semibold mb-3"
+                className="flex items-center justify-between w-full text-left text-white font-semibold mb-2 sm:mb-3 text-sm sm:text-base"
               >
-                <span className="flex items-center gap-2">
-                  <FaQuestionCircle className="text-emerald-300" />
+                <span className="flex items-center gap-1.5 sm:gap-2">
+                  <FaQuestionCircle className="text-emerald-300 text-xs sm:text-sm" />
                   Support & Legal
                 </span>
                 {expandedSection === "support" ? (
-                  <FaChevronUp className="text-emerald-300" />
+                  <FaChevronUp className="text-emerald-300 text-xs sm:text-sm" />
                 ) : (
-                  <FaChevronDown className="text-emerald-200" />
+                  <FaChevronDown className="text-emerald-200 text-xs sm:text-sm" />
                 )}
               </button>
               <AnimatePresence>
@@ -397,28 +397,28 @@ const Footer = () => {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="space-y-4"
+                    className="space-y-3 sm:space-y-4"
                   >
-                    <ul className="space-y-3">
+                    <ul className="space-y-2 sm:space-y-3">
                       {footerLinks.support.map((link) => (
                         <li key={link.name}>
                           <Link
                             to={link.path}
                             onClick={() => setExpandedSection(null)}
-                            className="text-emerald-100 hover:text-white transition-colors text-sm"
+                            className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm"
                           >
                             {link.name}
                           </Link>
                         </li>
                       ))}
                     </ul>
-                    <ul className="space-y-3 pt-3 border-t border-emerald-800">
+                    <ul className="space-y-2 sm:space-y-3 pt-2 sm:pt-3 border-t border-emerald-800">
                       {footerLinks.legal.map((link) => (
                         <li key={link.name}>
                           <Link
                             to={link.path}
                             onClick={() => setExpandedSection(null)}
-                            className="text-emerald-100 hover:text-white transition-colors text-sm"
+                            className="text-emerald-100 hover:text-white transition-colors text-xs sm:text-sm"
                           >
                             {link.name}
                           </Link>
@@ -434,24 +434,24 @@ const Footer = () => {
       </div>
 
       {/* Trust Badges */}
-      <div className="border-t border-emerald-800/50 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-center gap-6">
-            <div className="flex items-center gap-2 text-emerald-200">
-              <FaShieldAlt className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-medium">Secure Payments</span>
+      <div className="border-t border-emerald-800/50 py-4 sm:py-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 lg:gap-6">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-200">
+              <FaShieldAlt className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="text-[10px] sm:text-xs font-medium">Secure Payments</span>
             </div>
-            <div className="flex items-center gap-2 text-emerald-200">
-              <FaCheckCircle className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-medium">Verified Hosts</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-200">
+              <FaCheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="text-[10px] sm:text-xs font-medium">Verified Hosts</span>
             </div>
-            <div className="flex items-center gap-2 text-emerald-200">
-              <FaAward className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-medium">24/7 Support</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-200">
+              <FaAward className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="text-[10px] sm:text-xs font-medium">24/7 Support</span>
             </div>
-            <div className="flex items-center gap-2 text-emerald-200">
-              <FaLock className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-medium">SSL Encrypted</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 text-emerald-200">
+              <FaLock className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="text-[10px] sm:text-xs font-medium">SSL Encrypted</span>
             </div>
           </div>
         </div>
@@ -459,21 +459,21 @@ const Footer = () => {
 
       {/* Bottom Bar */}
       <div className="border-t border-emerald-800/50 bg-emerald-950/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-emerald-200 text-xs text-center md:text-left">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4">
+            <p className="text-emerald-200 text-[10px] sm:text-xs text-center md:text-left">
               © {currentYear} Zennest. All rights reserved.
             </p>
-            <div className="flex flex-wrap items-center justify-center md:justify-end gap-3">
+            <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-3">
               {/* Language Selector */}
               <div className="relative">
                 <button
                   onClick={() => setShowLanguageMenu(!showLanguageMenu)}
-                  className="flex items-center gap-2 text-emerald-200 hover:text-white transition-colors font-medium px-3 py-2 rounded-lg hover:bg-emerald-800/30 text-sm"
+                  className="flex items-center gap-1.5 sm:gap-2 text-emerald-200 hover:text-white transition-colors font-medium px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg hover:bg-emerald-800/30 text-xs sm:text-sm"
                 >
-                  <FaGlobe className="w-3 h-3" />
-                  <span>English</span>
-                  <FaChevronDown className={`w-3 h-3 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
+                  <FaGlobe className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  <span className="hidden sm:inline">English</span>
+                  <FaChevronDown className={`w-2.5 h-2.5 sm:w-3 sm:h-3 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
                 </button>
                 
                 <AnimatePresence>
@@ -482,7 +482,7 @@ const Footer = () => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden w-[200px] sm:min-w-[200px] max-w-[calc(100vw-2rem)] z-50"
+                      className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden w-[180px] sm:w-[200px] max-w-[calc(100vw-2rem)] z-50"
                     >
                       {languages.map((lang) => (
                         <button
@@ -490,15 +490,15 @@ const Footer = () => {
                           onClick={() => {
                             setShowLanguageMenu(false);
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors text-left"
+                          className="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-3 hover:bg-emerald-50 transition-colors text-left"
                         >
-                          <span className="text-xl">{lang.flag}</span>
-                          <span className="text-sm font-medium text-gray-900">{lang.name}</span>
+                          <span className="text-lg sm:text-xl">{lang.flag}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-900">{lang.name}</span>
                         </button>
                       ))}
-                      <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
-                        <div className="text-xs text-gray-600 font-medium mb-2">Currency</div>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                      <div className="border-t border-gray-200 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50">
+                        <div className="text-[10px] sm:text-xs text-gray-600 font-medium mb-1.5 sm:mb-2">Currency</div>
+                        <select className="w-full px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
                           <option>PHP - ₱</option>
                           <option>USD - $</option>
                           <option>EUR - €</option>
@@ -515,16 +515,17 @@ const Footer = () => {
               >
                 <Link
                   to="/host/onboarding"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl font-semibold text-sm shadow-lg transition-all"
+                  className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm shadow-lg transition-all"
                 >
-                  <FaUserTie className="w-3 h-3" />
-                  <span>Become a Host</span>
+                  <FaUserTie className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                  <span className="hidden sm:inline">Become a Host</span>
+                  <span className="sm:hidden">Host</span>
                 </Link>
               </motion.div>
               
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-800/50 hover:bg-emerald-700/70 text-white rounded-xl font-semibold text-sm border border-emerald-600/50 transition-all"
+                className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-800/50 hover:bg-emerald-700/70 text-white rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm border border-emerald-600/50 transition-all"
               >
                 Sign In
               </Link>

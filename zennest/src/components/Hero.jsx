@@ -1,24 +1,15 @@
 // src/components/Hero.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import waveSvg from "../assets/wave (1).svg";
 import heroVideo from "../assets/homestays_video.webm";
 import { FaUmbrellaBeach, FaCity, FaMountain, FaUtensils } from "react-icons/fa";
-import LightRays from "./LightRays";
-import BlurText from "./BlurText";
-
-const handleAnimationComplete = () => {
-  // Animation completed - no action needed
-  // Removed console.log for cleaner console output
-};
 
 const Hero = () => {
   const navigate = useNavigate();
-  const [mounted, setMounted] = useState(false);
-  const [videoError, setVideoError] = useState(null);
-  const videoRef = React.useRef(null);
+  const videoRef = useRef(null);
   const [heroRef, heroInView] = useInView({
     triggerOnce: true,
     threshold: 0.2,
@@ -26,10 +17,6 @@ const Hero = () => {
 
   // Use local video from assets folder
   const heroVideoUrl = heroVideo;
-  useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 50);
-    return () => clearTimeout(t);
-  }, []);
 
   // Ensure video plays (handles autoplay restrictions)
   useEffect(() => {
@@ -77,165 +64,176 @@ const Hero = () => {
 
 
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden pt-20 sm:pt-16 pb-12 sm:pb-8">
-      {/* Video Background */}
-      {heroVideoUrl ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-          preload="auto"
-          onError={(e) => {
-            const video = e.target;
-            const error = video.error;
-            let errorMessage = 'Failed to load video';
-            
-            if (error) {
-              switch (error.code) {
-                case MediaError.MEDIA_ERR_ABORTED:
-                  errorMessage = 'Video loading aborted';
-                  break;
-                case MediaError.MEDIA_ERR_NETWORK:
-                  errorMessage = 'Network error loading video';
-                  break;
-                case MediaError.MEDIA_ERR_DECODE:
-                  errorMessage = 'Video decode error';
-                  break;
-                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                  errorMessage = 'Video format not supported or URL incorrect';
-                  break;
-                default:
-                  errorMessage = `Video error (code: ${error.code})`;
-              }
-              
-              // Only log detailed errors in development
-              if (import.meta.env.DEV) {
-                console.error('Video error:', errorMessage, heroVideoUrl);
-              }
-            } else {
-              if (import.meta.env.DEV) {
-                console.error('Video error (no error code):', heroVideoUrl);
-              }
-            }
-            
-            setVideoError(errorMessage);
+    <motion.section 
+      ref={heroRef}
+      initial={{ opacity: 0 }}
+      animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
+      transition={{ duration: 0.6 }}
+      className="relative min-h-[75vh] sm:min-h-[80vh] md:min-h-[85vh] lg:min-h-screen flex items-center justify-center overflow-hidden pt-16 sm:pt-0"
+    >
+      {/* Background Video */}
+      <div className="absolute inset-0 z-0 overflow-hidden">
+        {heroVideoUrl ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              transform: heroInView ? 'scale(1)' : 'scale(1.15)',
+              transition: 'transform 1.2s ease-out'
+            }}
+          >
+            <source src={heroVideoUrl} type="video/webm" />
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          <motion.div 
+            initial={{ scale: 1.15 }}
+            animate={heroInView ? { scale: 1 } : { scale: 1.15 }}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            className="absolute inset-0 z-0 bg-gray-900"
+          ></motion.div>
+        )}
+      </div>
+      
+      {/* Gradient Overlays - Stronger on mobile for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/35 to-black/45 sm:from-black/30 sm:via-black/30 sm:to-black/40 z-0"></div>
+      <div className="absolute inset-0 bg-gradient-to-r from-emerald-900/25 via-transparent to-emerald-900/25 sm:from-emerald-900/20 sm:via-transparent sm:to-emerald-900/20 z-0"></div>
+      
+      {/* Animated Background Elements - Hidden on mobile, visible on larger screens */}
+      <div className="absolute inset-0 z-0 overflow-hidden hidden md:block">
+        <motion.div
+          animate={{
+            scale: [1, 1.2, 1],
+            opacity: [0.1, 0.2, 0.1],
           }}
-          onLoadedMetadata={() => {
-            if (videoRef.current) {
-              videoRef.current.play().catch(err => {
-                if (import.meta.env.DEV) {
-                  console.warn('Video autoplay prevented:', err);
-                }
-              });
-            }
+          transition={{
+            duration: 8,
+            repeat: Infinity,
+            ease: "easeInOut"
           }}
-        >
-          <source src={heroVideoUrl} type="video/webm" />
-          Your browser does not support the video tag.
-        </video>
-      ) : (
-        <div className="absolute inset-0 bg-gray-900 z-0 flex items-center justify-center">
-          <p className="text-white text-sm">Video not found</p>
-        </div>
-      )}
-      {videoError && (
-        <div className="absolute inset-0 bg-gray-900 z-0 flex items-center justify-center">
-          <p className="text-white text-sm">{videoError}</p>
-        </div>
-      )}
-      {/* Light Rays Background */}
-      <div className="absolute inset-0 z-0">
-        <LightRays
-          raysOrigin="top-left"
-          raysColor="#fff085"
-          raysSpeed={2}
-          lightSpread={5}
-          rayLength={5}
-          followMouse={true}
-          mouseInfluence={0.1}
-          noiseAmount={0.1}
-          distortion={0.05}
+          className="absolute top-20 right-20 w-72 h-72 bg-emerald-400 rounded-full blur-3xl"
+        />
+        <motion.div
+          animate={{
+            scale: [1, 1.3, 1],
+            opacity: [0.1, 0.15, 0.1],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 2
+          }}
+          className="absolute bottom-20 left-20 w-96 h-96 bg-emerald-500 rounded-full blur-3xl"
         />
       </div>
-
-      {/* Overlay - Stronger on mobile for better text readability */}
-      <div className="absolute inset-0 bg-black/20 sm:bg-black/10 z-10"></div>
-
-      {/* Content Grid */}
-      <div className="relative z-20 max-w-7xl mx-auto w-full px-4 sm:px-6 md:px-12">
-        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
-          {/* Left Column */}
-          <div className="flex flex-col justify-center text-white space-y-4 sm:space-y-5 md:space-y-6 px-2 sm:px-0">
-            <BlurText
-              text="Find your Sanctuary"
-              delay={150}
-              animateBy="words"
-              direction="top"
-              onAnimationComplete={handleAnimationComplete}
-              className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold leading-tight text-center lg:text-left px-1"
-            />
-
-            <p
-              className={`text-xs xs:text-sm sm:text-base md:text-lg max-w-md mx-auto lg:mx-0 text-center lg:text-left leading-relaxed px-2 sm:px-0 transform transition-all duration-700 ease-out
-                ${mounted ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}
-              style={{ transitionDelay: "220ms" }}
+      
+      {/* Hero Content */}
+      <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-5 md:px-6 lg:px-12 py-6 sm:py-8 md:py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 md:gap-8 lg:gap-12 items-center">
+          {/* Left Column - Main Content */}
+          <motion.div 
+            initial={{ opacity: 0, x: -50 }}
+            animate={heroInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -50 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+            className="text-white text-center lg:text-left"
+          >
+            {/* Badge */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="inline-flex items-center gap-1 sm:gap-1.5 md:gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-2.5 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 mb-3 sm:mb-4 md:mb-6"
             >
-              Discover unique stays and unforgettable experiences across the
-              Philippines. From serene rest houses to vibrant city tours, find
-              your perfect escape.
-            </p>
+              <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium">Your Perfect Escape</span>
+            </motion.div>
 
-            {/* Buttons */}
-            <div
-              className={`flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start px-2 sm:px-0 transform transition-all duration-700 ease-out
-                ${mounted ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`}
-              style={{ transitionDelay: "320ms" }}
+            <motion.h1 
+              initial={{ opacity: 0, y: 30 }}
+              animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+              className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-semibold mb-3 sm:mb-4 md:mb-6 leading-tight px-2 sm:px-0"
             >
-              <button className="bg-emerald-700 px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm hover:bg-emerald-800 transition transform hover:-translate-y-0.5 active:scale-95">
-                Explore Now
-              </button>
-              <button className="px-5 sm:px-6 py-2.5 sm:py-3 border border-white rounded-lg font-semibold text-xs sm:text-sm hover:bg-white/10 transition transform hover:-translate-y-0.5 active:scale-95">
-                About us
-              </button>
-            </div>
+              Find your
+              <motion.span 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={heroInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.6, delay: 0.8 }}
+                className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 bg-clip-text text-transparent mt-0.5 sm:mt-1 md:mt-2"
+              >
+                Sanctuary
+              </motion.span>
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.8, delay: 0.7 }}
+              className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl text-gray-200 mb-4 sm:mb-5 md:mb-6 lg:mb-8 leading-relaxed px-2 sm:px-3 md:px-0 max-w-xl mx-auto lg:mx-0"
+            >
+              Discover unique stays and unforgettable experiences across the Philippines. From serene rest houses to vibrant city tours, find your perfect escape.
+            </motion.p>
 
-            {/* Become a Host CTA */}
-            <div
-              className={`transform transition-all duration-700 ease-out text-center lg:text-left px-2 sm:px-0
-                ${mounted ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3"}`}
-              style={{ transitionDelay: "500ms" }}
+            {/* Stats */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.8, delay: 0.9 }}
+              className="grid grid-cols-3 gap-2 sm:gap-2.5 md:gap-3 lg:gap-4 xl:gap-6 mb-4 sm:mb-5 md:mb-6 lg:mb-8 px-2 sm:px-0"
             >
-              <div className="mt-4 sm:mt-6">
-                <p className="text-sm sm:text-base md:text-lg font-semibold text-white leading-tight">
-                  Be a part of Zennest
-                </p>
-                <p className="text-xs sm:text-sm text-white/80 mt-1 px-2 sm:px-0">
-                  Share your space and welcome guests across the Philippines.
-                </p>
-                <div className="mt-3 sm:mt-3">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/host/register')}
-                    className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg bg-white/12 backdrop-blur-sm border border-white/30 text-white text-xs sm:text-sm font-semibold hover:bg-white/20 transition shadow-sm active:scale-95"
-                    aria-label="Become a host"
-                  >
-                    Become a host
-                  </button>
-                </div>
+              <div>
+                <div className="text-lg sm:text-xl md:text-2xl font-semibold text-emerald-400">200+</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-gray-300">Listings</div>
               </div>
-            </div>
-          </div>
+              <div>
+                <div className="text-lg sm:text-xl md:text-2xl font-semibold text-emerald-400">4.9</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-gray-300">Avg Rating</div>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl md:text-2xl font-semibold text-emerald-400">1000+</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-gray-300">Happy Guests</div>
+              </div>
+            </motion.div>
+
+            {/* CTA Buttons */}
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+              transition={{ duration: 0.8, delay: 1.1 }}
+              className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 md:gap-3 justify-center lg:justify-start px-2 sm:px-0"
+            >
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/homestays')}
+                className="px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-emerald-600 text-white font-medium rounded-lg md:rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl text-xs sm:text-sm w-full sm:w-auto"
+              >
+                Explore Now
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/host/register')}
+                className="px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 border-2 border-white text-white font-medium rounded-lg md:rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm text-xs sm:text-sm w-full sm:w-auto"
+              >
+                Become a Host
+              </motion.button>
+            </motion.div>
+          </motion.div>
 
           {/* Right Column - Categories */}
           <motion.div
-            ref={heroRef}
             initial={{ opacity: 0, x: 50 }}
             animate={heroInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 50 }}
             transition={{ duration: 0.8, delay: 0.6 }}
-            className="grid grid-cols-2 gap-3"
+            className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 mt-4 sm:mt-5 md:mt-6 lg:mt-0 max-w-md mx-auto lg:max-w-none lg:mx-0"
           >
             {[
               { 
@@ -273,20 +271,20 @@ const Hero = () => {
                   key={category.title}
                   initial={{ opacity: 0, y: 30 }}
                   animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-                  transition={{ duration: 0.6, delay: 0.1 + idx * 0.1 }}
+                  transition={{ duration: 0.6, delay: 0.8 + idx * 0.1 }}
                   whileHover={{ scale: 1.05, y: -5 }}
                   onClick={category.onClick}
-                  className="bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl p-2 sm:p-3 hover:bg-white/15 transition-all cursor-pointer flex flex-col items-center justify-center shadow-lg min-h-[50px] sm:min-h-[60px]"
+                  className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg md:rounded-xl p-2.5 sm:p-3 md:p-4 text-center hover:bg-white/15 transition-all cursor-pointer active:scale-95"
                 >
                   <motion.div 
-                    className={`mb-3 flex justify-center ${category.color || "text-white"}`}
+                    className={`mb-1 sm:mb-1.5 md:mb-2 flex justify-center ${category.color || "text-white"}`}
                     whileHover={{ rotate: [0, -10, 10, 0], scale: 1.1 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <IconComponent className="w-8 h-8 sm:w-9 sm:h-9" />
+                    <IconComponent className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8" />
                   </motion.div>
-                  <div className="text-white font-semibold text-sm sm:text-base mb-1">{category.title}</div>
-                  <div className="text-xs text-white/90 text-center leading-tight">{category.desc}</div>
+                  <div className="text-white font-medium mb-0.5 text-[11px] sm:text-xs md:text-sm">{category.title}</div>
+                  <div className="text-[9px] sm:text-[10px] md:text-xs text-gray-300 leading-tight">{category.desc}</div>
                 </motion.div>
               );
             })}
@@ -294,15 +292,32 @@ const Hero = () => {
         </div>
       </div>
 
+      {/* Scroll Indicator */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
+        transition={{ duration: 1, delay: 1.2 }}
+        className="absolute bottom-3 sm:bottom-4 md:bottom-6 lg:bottom-8 left-1/2 transform -translate-x-1/2 z-10 hidden sm:block"
+      >
+        <motion.img
+          src="/src/assets/zennest-loading-icon.svg"
+          alt="Scroll"
+          animate={{ y: [0, 10, 0] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="w-6 h-6 sm:w-7 sm:h-7 md:w-14 md:h-14"
+        />
+      </motion.div>
+
       {/* Wave Divider */}
-      <img
+      <motion.img
         src={waveSvg}
         alt="Wave divider"
-        className={`absolute left-0 w-full bottom-[-50px] sm:bottom-[-65px] transform transition-all duration-900 ease-out pointer-events-none z-40
-          ${mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"}`}
-        style={{ transitionDelay: "480ms" }}
+        initial={{ opacity: 0, y: 8 }}
+        animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+        transition={{ duration: 0.9, delay: 1.2 }}
+        className="absolute left-0 w-full bottom-[-40px] sm:bottom-[-45px] md:bottom-[-50px] lg:bottom-[-65px] pointer-events-none z-40"
       />
-    </section>
+    </motion.section>
   );
 };
 

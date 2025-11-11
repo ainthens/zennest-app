@@ -301,7 +301,7 @@ const Services = () => {
         initial={{ opacity: 0 }}
         animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative min-h-screen flex items-center justify-center overflow-hidden"
+        className="relative min-h-[85vh] sm:min-h-screen flex items-center justify-center overflow-hidden"
       >
         {/* Background Video from Cloudinary */}
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -375,8 +375,8 @@ const Services = () => {
         </div>
         
         {/* Hero Content */}
-        <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+        <div className="relative z-10 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6 lg:px-12 py-8 sm:py-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
             {/* Left Column - Main Content */}
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
@@ -389,26 +389,26 @@ const Services = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
-                className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 mb-6"
+                className="inline-flex items-center gap-1.5 sm:gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-4 sm:mb-6"
               >
-                <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="text-sm font-medium">Premium Services</span>
+                <span className="text-xs sm:text-sm font-medium">Premium Services</span>
               </motion.div>
 
               <motion.h1 
                 initial={{ opacity: 0, y: 30 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                 transition={{ duration: 0.8, delay: 0.5 }}
-                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold mb-6 leading-tight"
+                className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-semibold mb-4 sm:mb-6 leading-tight"
               >
                 Discover Local
                 <motion.span 
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={heroInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.6, delay: 0.8 }}
-                  className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 bg-clip-text text-transparent mt-2"
+                  className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 bg-clip-text text-transparent mt-1 sm:mt-2"
                 >
                   Services
                 </motion.span>
@@ -418,7 +418,7 @@ const Services = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 0.7 }}
-                className="text-base sm:text-lg lg:text-xl text-gray-200 mb-8 leading-relaxed"
+                className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-200 mb-6 sm:mb-8 leading-relaxed"
               >
                 Elevate your stay with premium services from trusted local professionals. From personal chefs to wellness treatments, we've got you covered.
               </motion.p>
@@ -428,19 +428,19 @@ const Services = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 0.9 }}
-                className="grid grid-cols-3 gap-6 mb-8"
+                className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8"
               >
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">{services.length > 0 ? services.length : '30+'}</div>
-                  <div className="text-sm text-gray-300">Services</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">{services.length > 0 ? services.length : '30+'}</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Services</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">4.9</div>
-                  <div className="text-sm text-gray-300">Avg Rating</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">4.9</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Avg Rating</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">500+</div>
-                  <div className="text-sm text-gray-300">Bookings</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">500+</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Bookings</div>
                 </div>
               </motion.div>
 
@@ -449,12 +449,12 @@ const Services = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 1.1 }}
-                className="flex flex-col sm:flex-row gap-3"
+                className="flex flex-col sm:flex-row gap-2 sm:gap-3"
               >
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white font-medium rounded-lg sm:rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl text-xs sm:text-sm"
                 >
                   Explore Services
                 </motion.button>
@@ -462,7 +462,7 @@ const Services = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => navigate('/host/register')}
-                  className="px-6 py-3 border-2 border-white text-white font-medium rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm text-sm"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-white text-white font-medium rounded-lg sm:rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm text-xs sm:text-sm"
                 >
                   Become a Host
                 </motion.button>
@@ -474,7 +474,7 @@ const Services = () => {
               initial={{ opacity: 0, x: 50 }}
               animate={heroInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 50 }}
               transition={{ duration: 0.8, delay: 0.6 }}
-              className="grid grid-cols-2 gap-3"
+              className="grid grid-cols-2 gap-2 sm:gap-3 mt-6 lg:mt-0"
             >
               {[
                 { icon: FaUtensils, title: "Food", desc: "Private chefs & dining", color: "text-orange-300" },
@@ -490,17 +490,17 @@ const Services = () => {
                     animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                     transition={{ duration: 0.6, delay: 0.1 + idx * 0.1 }}
                     whileHover={{ scale: 1.05, y: -5 }}
-                    className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 text-center hover:bg-white/15 transition-all"
+                    className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg sm:rounded-xl p-3 sm:p-4 text-center hover:bg-white/15 transition-all"
                   >
                     <motion.div 
-                      className={`mb-2 flex justify-center ${service.color || "text-white"}`}
+                      className={`mb-1.5 sm:mb-2 flex justify-center ${service.color || "text-white"}`}
                       whileHover={{ rotate: [0, -10, 10, 0], scale: 1.1 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <IconComponent className="w-8 h-8" />
+                      <IconComponent className="w-6 h-6 sm:w-8 sm:h-8" />
                     </motion.div>
-                    <div className="text-white font-medium mb-0.5 text-sm">{service.title}</div>
-                    <div className="text-xs text-gray-300">{service.desc}</div>
+                    <div className="text-white font-medium mb-0.5 text-xs sm:text-sm">{service.title}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-300">{service.desc}</div>
                   </motion.div>
                 );
               })}
@@ -513,30 +513,30 @@ const Services = () => {
           initial={{ opacity: 0 }}
           animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
+          className="absolute bottom-4 sm:bottom-8 left-1/2 transform -translate-x-1/2 z-10"
         >
-          <motion.div
+          <motion.img
+            src="/src/assets/zennest-loading-icon.svg"
+            alt="Scroll"
             animate={{ y: [0, 10, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="w-6 h-10 border-2 border-white rounded-full flex justify-center"
-          >
-            <div className="w-1 h-3 bg-white rounded-full mt-2"></div>
-          </motion.div>
+            className="w-6 h-6 sm:w-7 sm:h-7 md:w-14 md:h-14"
+          />
         </motion.div>
       </motion.section>
 
       {/* Services Grid Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 lg:py-24 bg-slate-100">
-        <AnimatedSection className="text-center mb-12">
+      <section className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 sm:py-12 lg:py-16 xl:py-24 bg-slate-100">
+        <AnimatedSection className="text-center mb-6 sm:mb-8 lg:mb-12">
           <motion.h2 
             variants={fadeInUp}
-            className="text-2xl sm:text-3xl lg:text-3xl font-semibold text-emerald-900 mb-3"
+            className="text-xl sm:text-2xl md:text-3xl font-semibold text-emerald-900 mb-2 sm:mb-3"
           >
             Popular Services
           </motion.h2>
           <motion.p 
             variants={fadeInUp}
-            className="text-base text-gray-600 max-w-2xl mx-auto"
+            className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-2"
           >
             Handpicked services to make your stay unforgettable
           </motion.p>
@@ -544,32 +544,32 @@ const Services = () => {
 
         {/* Filters and Search Section */}
         <AnimatedSection className="mb-6 sm:mb-8">
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6">
+          <div className="bg-white rounded-lg sm:rounded-xl lg:rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
             {/* Search Bar */}
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-3 sm:mb-4 lg:mb-6">
               <div className="relative">
                 <input
                   type="text"
                   placeholder="Search services..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2.5 sm:py-3 pl-10 sm:pl-12 text-sm sm:text-base border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 lg:py-3 pl-9 sm:pl-10 lg:pl-12 text-xs sm:text-sm lg:text-base border border-gray-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
-                <svg className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="absolute left-2.5 sm:left-3 lg:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 lg:w-5 lg:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
             </div>
 
             {/* Filter Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 lg:gap-4">
               {/* Category Filter */}
               <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Category</label>
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5 lg:mb-2">Category</label>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                  className="w-full px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs sm:text-sm"
                 >
                   <option value="all">All Categories</option>
                   {serviceCategories.map(cat => (
@@ -580,11 +580,11 @@ const Services = () => {
 
               {/* Location Filter */}
               <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Location</label>
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5 lg:mb-2">Location</label>
                 <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                  className="w-full px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs sm:text-sm"
                 >
                   <option value="all">All Locations</option>
                   {locations.map(loc => (
@@ -595,11 +595,11 @@ const Services = () => {
 
               {/* Price Range Filter */}
               <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Price Range</label>
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5 lg:mb-2">Price Range</label>
                 <select
                   value={priceRange}
                   onChange={(e) => setPriceRange(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                  className="w-full px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs sm:text-sm"
                 >
                   <option value="all">All Prices</option>
                   <option value="low">Under ₱1,000</option>
@@ -610,11 +610,11 @@ const Services = () => {
 
               {/* Sort Filter */}
               <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Sort By</label>
+                <label className="block text-[10px] sm:text-xs lg:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5 lg:mb-2">Sort By</label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                  className="w-full px-2.5 sm:px-3 lg:px-4 py-1.5 sm:py-2 lg:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs sm:text-sm"
                 >
                   <option value="featured">Featured</option>
                   <option value="price-low">Price: Low to High</option>
@@ -627,8 +627,8 @@ const Services = () => {
 
             {/* Active Filters Count */}
             {(selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all' || searchQuery) && (
-              <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-                <div className="text-xs sm:text-sm text-gray-600">
+              <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                <div className="text-[10px] sm:text-xs lg:text-sm text-gray-600">
                   Showing {filteredServices.length} of {services.length} services
                 </div>
                 <button
@@ -639,7 +639,7 @@ const Services = () => {
                     setSearchQuery('');
                     setSortBy('featured');
                   }}
-                  className="text-xs sm:text-sm text-emerald-600 hover:text-emerald-700 active:text-emerald-800 font-medium transition-colors text-left sm:text-right"
+                  className="text-[10px] sm:text-xs lg:text-sm text-emerald-600 hover:text-emerald-700 active:text-emerald-800 font-medium transition-colors text-left sm:text-right"
                 >
                   Clear Filters
                 </button>
@@ -649,23 +649,23 @@ const Services = () => {
         </AnimatedSection>
 
         {/* Services Grid */}
-        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-6 xl:gap-8">
           {loading ? (
             <div className="col-span-full text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
               <p className="text-gray-600">Loading services...</p>
             </div>
           ) : filteredServices.length === 0 ? (
-            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl shadow-inner p-16 text-center border-2 border-dashed border-gray-300">
-              <div className="mb-6">
-                <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-full shadow-lg mb-4">
-                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl shadow-inner p-8 sm:p-12 lg:p-16 text-center border-2 border-dashed border-gray-300">
+              <div className="mb-4 sm:mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-full shadow-lg mb-3 sm:mb-4">
+                  <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No services found</h3>
-              <p className="text-gray-600 max-w-md mx-auto mb-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1.5 sm:mb-2">No services found</h3>
+              <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto mb-4 sm:mb-6 px-2">
                 {searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all' 
                   ? 'Try adjusting your filters to see more results.'
                   : "We're working on bringing you amazing local services. Check back soon!"}
@@ -678,7 +678,7 @@ const Services = () => {
                     setPriceRange('all');
                     setSearchQuery('');
                   }}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                  className="px-4 sm:px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-xs sm:text-sm"
                 >
                   Clear Filters
                 </button>
@@ -698,7 +698,7 @@ const Services = () => {
                 className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200/60 hover:border-emerald-200 group h-full flex flex-col cursor-pointer relative w-full"
               >
                 {/* Service Image/Header */}
-                <div className="relative h-48 sm:h-52 md:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
+                <div className="relative h-40 sm:h-48 md:h-52 lg:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
                   {service.image ? (
                     <>
                       <img 
@@ -713,14 +713,14 @@ const Services = () => {
                   )}
                   
                   {/* Icon Badge */}
-                  <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm rounded-xl p-2.5 shadow-sm border border-gray-200/60 z-10">
-                    <span className="text-2xl">{service.icon || '✨'}</span>
+                  <div className="absolute top-2 sm:top-3 left-2 sm:left-3 bg-white/95 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 sm:p-2.5 shadow-sm border border-gray-200/60 z-10">
+                    <span className="text-lg sm:text-xl lg:text-2xl">{service.icon || '✨'}</span>
                   </div>
                   
                   {/* Rating Badge */}
                   {service.rating > 0 && (
-                    <div className="absolute left-3 bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
-                      <svg className="w-3.5 h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                    <div className="absolute left-2 sm:left-3 bottom-2 sm:bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
+                      <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
                         <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
                       </svg>
                       <span>{service.rating.toFixed(1)}</span>
@@ -729,37 +729,37 @@ const Services = () => {
 
                   {/* Discount Badge */}
                   {service.discount > 0 && (
-                    <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
+                    <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
                       {service.discount}% OFF
                     </div>
                   )}
                 </div>
                 
-                <div className="p-4 sm:p-5 flex-1 flex flex-col">
+                <div className="p-3 sm:p-4 lg:p-5 flex-1 flex flex-col">
                   {/* Service Info */}
-                  <div className="mb-4 flex-1">
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-2 group-hover:text-emerald-700 transition-colors">
+                  <div className="mb-3 sm:mb-4 flex-1">
+                    <h3 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-1.5 sm:mb-2 group-hover:text-emerald-700 transition-colors">
                       {service.title}
                     </h3>
                     
                     {/* Location */}
                     {service.location && (
-                      <div className="flex items-center gap-1 text-sm text-gray-600 mb-3">
-                        <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <div className="flex items-center gap-1 text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
+                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                         </svg>
                         <span className="line-clamp-1">{service.location}</span>
                       </div>
                     )}
                     
-                    <p className="text-gray-600 text-sm leading-relaxed line-clamp-2 mb-3">
+                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed line-clamp-2 mb-2 sm:mb-3">
                       {service.description}
                     </p>
 
                     {/* Reviews & Bookings */}
                     {service.reviews > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <svg className="w-3.5 h-3.5 text-emerald-500 fill-current" viewBox="0 0 20 20">
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-600">
+                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500 fill-current" viewBox="0 0 20 20">
                           <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
                         </svg>
                         <span className="font-semibold text-gray-900">{service.rating.toFixed(1)}</span>
@@ -770,28 +770,28 @@ const Services = () => {
                   </div>
 
                   {/* Price and CTA */}
-                  <div className="mt-auto pt-4 border-t border-gray-100">
-                    <div className="flex items-center justify-between gap-3">
+                  <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-between gap-2 sm:gap-3">
                       <div className="min-w-0 flex-1">
                         {service.discount > 0 ? (
                           <div>
-                            <div className="flex items-baseline gap-2 mb-1">
-                              <span className="text-xl font-bold text-emerald-600">
+                            <div className="flex items-baseline gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
+                              <span className="text-lg sm:text-xl font-bold text-emerald-600">
                                 ₱{((service.rate || 0) * (1 - service.discount / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                               </span>
-                              <span className="text-sm text-gray-400 line-through font-medium">
+                              <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">
                                 ₱{(service.rate || 0).toLocaleString()}
                               </span>
-                              <span className="text-xs text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded">
+                              <span className="text-[10px] sm:text-xs text-red-600 font-bold bg-red-50 px-1.5 sm:px-2 py-0.5 rounded">
                                 -{service.discount}%
                               </span>
                             </div>
-                            <p className="text-xs text-gray-500 whitespace-nowrap">{service.duration}</p>
+                            <p className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">{service.duration}</p>
                           </div>
                         ) : (
                           <div>
-                            <span className="text-xl font-bold text-emerald-600">₱{(service.rate || 0).toLocaleString()}</span>
-                            <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">{service.duration}</p>
+                            <span className="text-lg sm:text-xl font-bold text-emerald-600">₱{(service.rate || 0).toLocaleString()}</span>
+                            <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 whitespace-nowrap">{service.duration}</p>
                           </div>
                         )}
                       </div>
@@ -800,10 +800,10 @@ const Services = () => {
                           e.stopPropagation();
                           handleViewDetails(service);
                         }}
-                        className="bg-emerald-600 text-white py-2.5 px-5 rounded-xl text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-2 flex-shrink-0"
+                        className="bg-emerald-600 text-white py-2 sm:py-2.5 px-3 sm:px-5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
                       >
                         Book
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
@@ -821,19 +821,20 @@ const Services = () => {
 
         {/* Pagination */}
         {filteredServices.length > itemsPerPage && (
-          <div className="flex items-center justify-center gap-2 mt-8 pt-8 border-t border-gray-200">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Previous
+              <span className="hidden sm:inline">Previous</span>
+              <span className="sm:hidden">Prev</span>
             </button>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
                 if (
                   page === 1 ||
@@ -844,7 +845,7 @@ const Services = () => {
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
                         currentPage === page
                           ? 'bg-emerald-600 text-white'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -854,7 +855,7 @@ const Services = () => {
                     </button>
                   );
                 } else if (page === currentPage - 2 || page === currentPage + 2) {
-                  return <span key={page} className="px-2 text-gray-400">...</span>;
+                  return <span key={page} className="px-1 sm:px-2 text-gray-400 text-xs sm:text-sm">...</span>;
                 }
                 return null;
               })}
@@ -863,10 +864,11 @@ const Services = () => {
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              Next
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="hidden sm:inline">Next</span>
+              <span className="sm:hidden">Next</span>
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -875,7 +877,7 @@ const Services = () => {
 
         {/* Results info */}
         {filteredServices.length > 0 && (
-          <div className="text-center mt-4 text-sm text-gray-600">
+          <div className="text-center mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600">
             Showing {startIndex + 1} - {Math.min(endIndex, filteredServices.length)} of {filteredServices.length} services
           </div>
         )}

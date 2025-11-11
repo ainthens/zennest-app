@@ -2,7 +2,11 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { initConsoleManager } from "./utils/consoleManager";
 import "./index.css"; // <- ensure this is present
+
+// Initialize console manager to control logging in production
+initConsoleManager();
 
 const root = document.getElementById("root");
 

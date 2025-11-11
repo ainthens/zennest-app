@@ -5,6 +5,7 @@ import useAuth from "./hooks/useAuth";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
+import LandingPage from "./pages/LandingPage";
 import HomeStays from "./pages/HomeStays";
 import ListingDetails from "./pages/ListingDetails";
 import Login from "./components/Login";
@@ -191,10 +192,14 @@ const AppContent = () => {
       {!shouldHide && <Header />}
       <main className="flex-1">
           <Routes>
-            {/* Default Route - Redirect to Homestays */}
+            {/* Default Route - Landing Page */}
             <Route 
               path="/" 
-              element={<Navigate to="/homestays" replace />}
+              element={
+                <RouteErrorBoundary>
+                  <LandingPage />
+                </RouteErrorBoundary>
+              }
             />
             
             {/* Home Stays Route */}

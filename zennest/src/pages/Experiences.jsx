@@ -316,7 +316,7 @@ const Experiences = () => {
         initial={{ opacity: 0 }}
         animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative min-h-screen flex items-center justify-center overflow-hidden"
+        className="relative min-h-[85vh] sm:min-h-screen flex items-center justify-center overflow-hidden"
       >
         {/* Background Video from Cloudinary */}
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -388,8 +388,8 @@ const Experiences = () => {
         </div>
         
         {/* Hero Content */}
-        <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+        <div className="relative z-10 max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6 lg:px-12 py-8 sm:py-12">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 items-center">
             {/* Left Column - Main Content */}
             <motion.div 
               initial={{ opacity: 0, x: -50 }}
@@ -402,26 +402,26 @@ const Experiences = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.6, delay: 0.4 }}
-                className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2 mb-6"
+                className="inline-flex items-center gap-1.5 sm:gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-4 sm:mb-6"
               >
-                <svg className="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="text-sm font-medium">Curated Experiences</span>
+                <span className="text-xs sm:text-sm font-medium">Curated Experiences</span>
               </motion.div>
 
               <motion.h1 
                 initial={{ opacity: 0, y: 30 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                 transition={{ duration: 0.8, delay: 0.5 }}
-                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold mb-6 leading-tight"
+                className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-semibold mb-4 sm:mb-6 leading-tight"
               >
                 Discover Amazing
                 <motion.span 
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={heroInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.6, delay: 0.8 }}
-                  className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 bg-clip-text text-transparent mt-2"
+                  className="block bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 bg-clip-text text-transparent mt-1 sm:mt-2"
                 >
                   Experiences
                 </motion.span>
@@ -431,7 +431,7 @@ const Experiences = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 0.7 }}
-                className="text-base sm:text-lg lg:text-xl text-gray-200 mb-8 leading-relaxed"
+                className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-200 mb-6 sm:mb-8 leading-relaxed"
               >
                 Immerse yourself in authentic local culture through handpicked tours, workshops, and adventures that create lasting memories.
               </motion.p>
@@ -441,19 +441,19 @@ const Experiences = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 0.9 }}
-                className="grid grid-cols-3 gap-6 mb-8"
+                className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8"
               >
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">{experiences.length > 0 ? experiences.length : '50+'}</div>
-                  <div className="text-sm text-gray-300">Experiences</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">{experiences.length > 0 ? experiences.length : '50+'}</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Experiences</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">4.8</div>
-                  <div className="text-sm text-gray-300">Avg Rating</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">4.8</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Avg Rating</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold text-emerald-400">100+</div>
-                  <div className="text-sm text-gray-300">Happy Guests</div>
+                  <div className="text-xl sm:text-2xl font-semibold text-emerald-400">100+</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Happy Guests</div>
                 </div>
               </motion.div>
 
@@ -462,12 +462,12 @@ const Experiences = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
                 transition={{ duration: 0.8, delay: 1.1 }}
-                className="flex flex-col sm:flex-row gap-3"
+                className="flex flex-col sm:flex-row gap-2 sm:gap-3"
               >
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-6 py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white font-medium rounded-lg sm:rounded-xl hover:bg-emerald-700 transition-all duration-300 shadow-lg hover:shadow-xl text-xs sm:text-sm"
                 >
                   Explore All Activities
                 </motion.button>
@@ -475,7 +475,7 @@ const Experiences = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => navigate('/host/register')}
-                  className="px-6 py-3 border-2 border-white text-white font-medium rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm text-sm"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 border-2 border-white text-white font-medium rounded-lg sm:rounded-xl hover:bg-white/10 transition-all duration-300 backdrop-blur-sm text-xs sm:text-sm"
                 >
                   Become a Host
                 </motion.button>
@@ -487,7 +487,7 @@ const Experiences = () => {
               initial={{ opacity: 0, x: 50 }}
               animate={heroInView ? { opacity: 1, x: 0 } : { opacity: 0, x: 50 }}
               transition={{ duration: 0.8, delay: 0.6 }}
-              className="grid grid-cols-2 gap-3"
+              className="grid grid-cols-2 gap-2 sm:gap-3 mt-6 lg:mt-0"
             >
               {[
                 { icon: FaBullseye, title: "Curated", desc: "Handpicked by locals", color: "text-purple-300" },
@@ -503,17 +503,17 @@ const Experiences = () => {
                     animate={heroInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
                     transition={{ duration: 0.6, delay: 0.8 + idx * 0.1 }}
                     whileHover={{ scale: 1.05, y: -5 }}
-                    className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-4 text-center hover:bg-white/15 transition-all"
+                    className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg sm:rounded-xl p-3 sm:p-4 text-center hover:bg-white/15 transition-all"
                   >
                     <motion.div 
-                      className={`mb-2 flex justify-center ${feature.color || "text-white"}`}
+                      className={`mb-1.5 sm:mb-2 flex justify-center ${feature.color || "text-white"}`}
                       whileHover={{ rotate: [0, -10, 10, 0], scale: 1.1 }}
                       transition={{ duration: 0.3 }}
                     >
-                      <IconComponent className="w-8 h-8" />
+                      <IconComponent className="w-6 h-6 sm:w-8 sm:h-8" />
                     </motion.div>
-                    <div className="text-white font-medium mb-0.5 text-sm">{feature.title}</div>
-                    <div className="text-xs text-gray-300">{feature.desc}</div>
+                    <div className="text-white font-medium mb-0.5 text-xs sm:text-sm">{feature.title}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-300">{feature.desc}</div>
                   </motion.div>
                 );
               })}
@@ -526,30 +526,30 @@ const Experiences = () => {
           initial={{ opacity: 0 }}
           animate={heroInView ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
+          className="absolute bottom-4 sm:bottom-8 left-1/2 transform -translate-x-1/2 z-10"
         >
-          <motion.div
+          <motion.img
+            src="/src/assets/zennest-loading-icon.svg"
+            alt="Scroll"
             animate={{ y: [0, 10, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
-            className="w-6 h-10 border-2 border-white rounded-full flex justify-center"
-          >
-            <div className="w-1 h-3 bg-white rounded-full mt-2"></div>
-          </motion.div>
+            className="w-6 h-6 sm:w-7 sm:h-7 md:w-14 md:h-14"
+          />
         </motion.div>
       </motion.section>
 
       {/* Experiences Grid Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-16 lg:py-24 bg-slate-100">
-        <AnimatedSection className="text-center mb-12">
+      <section className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 sm:py-12 lg:py-16 xl:py-24 bg-slate-100">
+        <AnimatedSection className="text-center mb-6 sm:mb-8 lg:mb-12">
           <motion.h2 
             variants={fadeInUp}
-            className="text-2xl sm:text-3xl lg:text-3xl font-semibold text-emerald-900 mb-3"
+            className="text-xl sm:text-2xl md:text-3xl font-semibold text-emerald-900 mb-2 sm:mb-3"
           >
             Featured Experiences
           </motion.h2>
           <motion.p 
             variants={fadeInUp}
-            className="text-base text-gray-600 max-w-2xl mx-auto"
+            className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-2"
           >
             Handpicked activities and tours that showcase the best of local culture and adventure
           </motion.p>
@@ -591,23 +591,23 @@ const Experiences = () => {
         </AnimatedSection>
 
         {/* Experiences Grid */}
-        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
           {loading ? (
             <div className="col-span-full">
               <Loading message="Loading experiences..." size="medium" fullScreen={false} />
             </div>
           ) : filteredExperiences.length === 0 ? (
-            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl shadow-inner p-16 text-center border-2 border-dashed border-gray-300">
-              <div className="mb-6">
-                <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-full shadow-lg mb-4">
-                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl shadow-inner p-8 sm:p-12 lg:p-16 text-center border-2 border-dashed border-gray-300">
+              <div className="mb-4 sm:mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-full shadow-lg mb-3 sm:mb-4">
+                  <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No experiences found</h3>
-              <p className="text-gray-600 max-w-md mx-auto mb-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1.5 sm:mb-2">No experiences found</h3>
+              <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto mb-4 sm:mb-6 px-2">
                 {searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all' 
                   ? 'Try adjusting your filters to see more results.'
                   : "We're curating amazing local experiences for you. Check back soon for adventures!"}
@@ -620,7 +620,7 @@ const Experiences = () => {
                     setPriceRange('all');
                     setSearchQuery('');
                   }}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                  className="px-4 sm:px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-xs sm:text-sm"
                 >
                   Clear Filters
                 </button>
@@ -635,7 +635,7 @@ const Experiences = () => {
                   className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200/60 hover:border-emerald-200 group cursor-pointer h-full flex flex-col relative"
                 >
                   {/* Experience Image */}
-                  <div className="relative h-48 sm:h-52 md:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
+                  <div className="relative h-40 sm:h-48 md:h-52 lg:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
                     {experience.image ? (
                       <>
                         <img 
@@ -651,8 +651,8 @@ const Experiences = () => {
                     
                     {/* Rating Badge */}
                     {experience.rating > 0 && (
-                      <div className="absolute left-3 bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
-                        <svg className="w-3.5 h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                      <div className="absolute left-2 sm:left-3 bottom-2 sm:bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
+                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
                           <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
                         </svg>
                         <span>{experience.rating.toFixed(1)}</span>
@@ -661,40 +661,40 @@ const Experiences = () => {
 
                     {/* Discount Badge */}
                     {experience.discount > 0 && (
-                      <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
+                      <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
                         {experience.discount}% OFF
                       </div>
                     )}
 
                     {/* Location Badge */}
                     {experience.location && (
-                      <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm text-gray-900 rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm border border-gray-200/60 flex items-center gap-1.5 z-10">
-                        <svg className="w-3 h-3 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <div className="absolute top-2 sm:top-3 left-2 sm:left-3 bg-white/95 backdrop-blur-sm text-gray-900 rounded-lg px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold shadow-sm border border-gray-200/60 flex items-center gap-1 sm:gap-1.5 z-10">
+                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                         </svg>
-                        <span className="truncate max-w-[100px]">{experience.location}</span>
+                        <span className="truncate max-w-[80px] sm:max-w-[100px]">{experience.location}</span>
                       </div>
                     )}
                   </div>
                   
                   {/* Experience Content */}
-                  <div className="p-4 sm:p-5 flex-1 flex flex-col">
+                  <div className="p-3 sm:p-4 lg:p-5 flex-1 flex flex-col">
                     {/* Title */}
-                    <div className="mb-3">
-                      <h2 className="text-lg sm:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-2 group-hover:text-emerald-700 transition-colors">
+                    <div className="mb-2 sm:mb-3">
+                      <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-1.5 sm:mb-2 group-hover:text-emerald-700 transition-colors">
                         {experience.title}
                       </h2>
                     </div>
 
                     {/* Description */}
-                    <p className="text-gray-600 text-sm leading-relaxed line-clamp-2 mb-3 flex-1">
+                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed line-clamp-2 mb-2 sm:mb-3 flex-1">
                       {experience.description}
                     </p>
 
                     {/* Guests Badge */}
                     {experience.guests > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
-                        <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">
+                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                         <span className="font-semibold text-gray-900">Up to {experience.guests}</span>
@@ -704,28 +704,28 @@ const Experiences = () => {
                     )}
 
                     {/* Price and CTA */}
-                    <div className="mt-auto pt-4 border-t border-gray-100">
-                      <div className="flex items-center justify-between gap-3">
+                    <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-100">
+                      <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0 flex-1">
                           {experience.discount > 0 ? (
                             <div>
-                              <div className="flex items-baseline gap-2 mb-1">
-                                <span className="text-xl font-bold text-emerald-600">
+                              <div className="flex items-baseline gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
+                                <span className="text-lg sm:text-xl font-bold text-emerald-600">
                                   ₱{((experience.price || 0) * (1 - experience.discount / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                                 </span>
-                                <span className="text-sm text-gray-400 line-through font-medium">
+                                <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">
                                   ₱{(experience.price || 0).toLocaleString()}
                                 </span>
-                                <span className="text-xs text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded">
+                                <span className="text-[10px] sm:text-xs text-red-600 font-bold bg-red-50 px-1.5 sm:px-2 py-0.5 rounded">
                                   -{experience.discount}%
                                 </span>
                               </div>
-                              <p className="text-xs text-gray-500 whitespace-nowrap">per person</p>
+                              <p className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">per person</p>
                             </div>
                           ) : (
                             <div>
-                              <span className="text-xl font-bold text-emerald-600">₱{(experience.price || 0).toLocaleString()}</span>
-                              <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">per person</p>
+                              <span className="text-lg sm:text-xl font-bold text-emerald-600">₱{(experience.price || 0).toLocaleString()}</span>
+                              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 whitespace-nowrap">per person</p>
                             </div>
                           )}
                         </div>
@@ -734,10 +734,10 @@ const Experiences = () => {
                             e.stopPropagation();
                             handleViewDetails(experience);
                           }}
-                          className="bg-emerald-600 text-white py-2.5 px-5 rounded-xl text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-2 flex-shrink-0"
+                          className="bg-emerald-600 text-white py-2 sm:py-2.5 px-3 sm:px-5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
                         >
                           Book
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </button>
@@ -755,19 +755,20 @@ const Experiences = () => {
 
         {/* Pagination */}
         {filteredExperiences.length > itemsPerPage && (
-          <div className="flex items-center justify-center gap-2 mt-8 pt-8 border-t border-gray-200">
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Previous
+              <span className="hidden sm:inline">Previous</span>
+              <span className="sm:hidden">Prev</span>
             </button>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
                 if (
                   page === 1 ||
@@ -778,7 +779,7 @@ const Experiences = () => {
                     <button
                       key={page}
                       onClick={() => setCurrentPage(page)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
                         currentPage === page
                           ? 'bg-emerald-600 text-white'
                           : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -788,7 +789,7 @@ const Experiences = () => {
                     </button>
                   );
                 } else if (page === currentPage - 2 || page === currentPage + 2) {
-                  return <span key={page} className="px-2 text-gray-400">...</span>;
+                  return <span key={page} className="px-1 sm:px-2 text-gray-400 text-xs sm:text-sm">...</span>;
                 }
                 return null;
               })}
@@ -797,10 +798,11 @@ const Experiences = () => {
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
             >
-              Next
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="hidden sm:inline">Next</span>
+              <span className="sm:hidden">Next</span>
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -809,7 +811,7 @@ const Experiences = () => {
 
         {/* Results info */}
         {filteredExperiences.length > 0 && (
-          <div className="text-center mt-4 text-sm text-gray-600">
+          <div className="text-center mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600">
             Showing {startIndex + 1} - {Math.min(endIndex, filteredExperiences.length)} of {filteredExperiences.length} experiences
           </div>
         )}
