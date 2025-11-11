@@ -126,20 +126,20 @@ const Footer = () => {
                   <FaCheckCircle /> Thanks for subscribing!
                 </motion.div>
               ) : (
-                <form onSubmit={handleNewsletterSubmit} className="flex gap-2">
+                <form onSubmit={handleNewsletterSubmit} className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-white/10 border border-emerald-600/50 text-white placeholder-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
+                    className="flex-1 w-full px-4 py-2.5 rounded-xl bg-white/10 border border-emerald-600/50 text-white placeholder-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-400 text-sm"
                     required
                   />
                   <motion.button
                     type="submit"
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm transition-colors shadow-lg"
+                    className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm transition-colors shadow-lg whitespace-nowrap"
                   >
                     Subscribe
                   </motion.button>
@@ -482,7 +482,7 @@ const Footer = () => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden min-w-[200px] z-50"
+                      className="absolute bottom-full right-0 mb-2 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden w-[200px] sm:min-w-[200px] max-w-[calc(100vw-2rem)] z-50"
                     >
                       {languages.map((lang) => (
                         <button

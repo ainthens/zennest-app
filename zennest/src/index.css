@@ -8,8 +8,52 @@
 
 /* set base to use Tailwind's sans (now Poppins) */
 @layer base {
+  html {
+    width: 100%;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  
   body {
     @apply font-sans;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    position: relative;
+  }
+  
+  /* Ensure images are responsive */
+  img, svg {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Prevent horizontal overflow from wide elements */
+  iframe, embed, object, canvas {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Videos should maintain aspect ratio but be responsive */
+  video {
+    max-width: 100%;
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+  
+  /* Prevent table overflow */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  /* Ensure form elements don't overflow */
+  input, textarea, select {
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 
