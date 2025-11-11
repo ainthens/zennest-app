@@ -705,15 +705,43 @@ const PaymentProcessing = () => {
         throw new Error('Booking not created yet');
       }
       
+      if (!finalTotal || finalTotal <= 0) {
+        throw new Error('Invalid payment amount');
+      }
+      
+      console.log('Creating PayPal order:', {
+        bookingId: pendingBookingId,
+        amount: finalTotal,
+        currency: 'PHP',
+        listing: listing.title
+      });
+      
       return actions.order.create({
         purchase_units: [{
           amount: {
-            value: (finalTotal / 56).toFixed(2), // Convert PHP to USD (approximate rate)
-            currency_code: 'USD'
+            value: finalTotal.toFixed(2),
+            currency_code: 'PHP'
           },
           description: `Booking payment for ${listing.title}`,
-          custom_id: pendingBookingId
-        }]
+          custom_id: pendingBookingId,
+          item_list: {
+            items: [{
+              name: listing.title,
+              quantity: '1',
+              unit_amount: {
+                value: finalTotal.toFixed(2),
+                currency_code: 'PHP'
+              }
+            }]
+          }
+        }],
+        application_context: {
+          brand_name: 'Zennest',
+          landing_page: 'BILLING',
+          user_action: 'PAY_NOW'
+          // Note: With PayPal SDK, payment is handled in-page via onApprove callback
+          // No need for return_url/cancel_url as the SDK handles the flow automatically
+        }
       });
     } catch (error) {
       console.error('Error creating PayPal order:', error);
@@ -725,14 +753,44 @@ const PaymentProcessing = () => {
   const onApprovePayPalOrder = (data, actions) => {
     return actions.order.capture().then((details) => {
       console.log('PayPal payment approved:', details);
+      console.log('Payment details:', JSON.stringify(details, null, 2));
+      
       if (details.status === 'COMPLETED') {
+        // Verify payment amount matches
+        const purchaseUnit = details.purchase_units?.[0];
+        const amount = purchaseUnit?.amount;
+        const paidAmount = amount?.value ? parseFloat(amount.value) : finalTotal;
+        const currency = amount?.currency_code || 'PHP';
+        
+        console.log('Payment verification:', {
+          expected: finalTotal,
+          received: paidAmount,
+          currency: currency,
+          paymentId: details.id,
+          orderId: data.orderID
+        });
+        
+        // Verify amount is close to expected (allow small rounding differences)
+        if (Math.abs(paidAmount - finalTotal) > 0.01) {
+          console.warn(`Payment amount mismatch: Expected ${finalTotal}, received ${paidAmount}`);
+          // Still proceed but log the discrepancy
+        }
+        
         handlePayPalSuccess(details.id);
       } else {
-        alert('Payment was not completed. Please try again.');
+        console.error('Payment status not completed:', details.status);
+        setProcessing(false);
+        alert(`Payment was not completed. Status: ${details.status}. Please try again.`);
       }
     }).catch((error) => {
       console.error('PayPal payment error:', error);
-      alert('Payment failed. Please try again or contact support.');
+      console.error('Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      setProcessing(false);
+      alert(`Payment failed: ${error.message || 'Please try again or contact support.'}`);
     });
   };
 
@@ -1260,7 +1318,11 @@ const PaymentProcessing = () => {
                         <PayPalScriptProvider
                           options={{
                             'client-id': import.meta.env.VITE_PAYPAL_CLIENT_ID,
-                            currency: 'USD'
+                            currency: 'PHP',
+                            intent: 'capture',
+                            components: 'buttons'
+                            // PayPal automatically detects sandbox vs live based on client ID
+                            // Sandbox client IDs have specific patterns that PayPal recognizes
                           }}
                         >
                           <PayPalButtons
@@ -1268,19 +1330,34 @@ const PaymentProcessing = () => {
                             onApprove={onApprovePayPalOrder}
                             onError={(err) => {
                               console.error('PayPal error:', err);
-                              alert('Payment failed. Please try again.');
+                              setProcessing(false);
+                              alert(`Payment failed: ${err.message || 'Please try again.'}`);
+                            }}
+                            onCancel={(data) => {
+                              console.log('PayPal payment cancelled:', data);
+                              setProcessing(false);
+                              setPendingBookingId(null);
                             }}
                             style={{
                               layout: 'vertical',
                               shape: 'rect',
-                              label: 'paypal'
+                              label: 'paypal',
+                              color: 'blue',
+                              height: 45
                             }}
+                            fundingSource="paypal"
                           />
                         </PayPalScriptProvider>
                       ) : (
-                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
-                          <p className="text-sm text-yellow-800">
-                            PayPal Client ID not configured. Please add VITE_PAYPAL_CLIENT_ID to your .env file.
+                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                          <p className="text-sm font-semibold text-yellow-800 mb-2">
+                            ⚠️ PayPal Client ID not configured
+                          </p>
+                          <p className="text-xs text-yellow-700 mb-2">
+                            Please add VITE_PAYPAL_CLIENT_ID to your environment variables.
+                          </p>
+                          <p className="text-xs text-yellow-600">
+                            For Netlify: Go to Site settings → Environment variables → Add VITE_PAYPAL_CLIENT_ID
                           </p>
                         </div>
                       )}

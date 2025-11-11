@@ -978,7 +978,8 @@ const HostRegistration = () => {
                       options={{
                         'client-id': import.meta.env.VITE_PAYPAL_CLIENT_ID,
                         currency: 'PHP',
-                        intent: 'capture'
+                        intent: 'capture',
+                        components: 'buttons'
                       }}
                     >
                       <PayPalButtons
@@ -986,7 +987,18 @@ const HostRegistration = () => {
                         onApprove={onApprovePayPalOrder}
                         onError={(err) => {
                           console.error('PayPal error:', err);
-                          setError('Payment failed. Please try again.');
+                          console.error('Error details:', {
+                            message: err.message,
+                            name: err.name,
+                            stack: err.stack
+                          });
+                          setError(`Payment failed: ${err.message || 'Please try again.'}`);
+                          setLoading(false);
+                        }}
+                        onCancel={(data) => {
+                          console.log('PayPal payment cancelled:', data);
+                          setError('Payment was cancelled.');
+                          setLoading(false);
                         }}
                         style={{
                           layout: 'vertical',
@@ -995,6 +1007,7 @@ const HostRegistration = () => {
                           color: 'blue',
                           height: 45
                         }}
+                        fundingSource="paypal"
                       />
                     </PayPalScriptProvider>
                   </div>
@@ -1005,11 +1018,17 @@ const HostRegistration = () => {
                         <span className="text-white text-xs font-bold">!</span>
                       </div>
                       <div>
-                        <p className="text-amber-800 text-sm font-medium mb-1">
-                          PayPal Client ID not configured. Please add VITE_PAYPAL_CLIENT_ID to your .env file.
+                        <p className="text-amber-800 text-sm font-semibold mb-1">
+                          ⚠️ PayPal Client ID not configured
                         </p>
-                        <p className="text-amber-700 text-xs">
-                          See PAYPAL_SANDBOX_SETUP.md for instructions.
+                        <p className="text-amber-700 text-xs mb-1">
+                          Please add VITE_PAYPAL_CLIENT_ID to your environment variables.
+                        </p>
+                        <p className="text-amber-600 text-xs mb-1">
+                          For Netlify: Go to Site settings → Environment variables → Add VITE_PAYPAL_CLIENT_ID
+                        </p>
+                        <p className="text-amber-600 text-xs">
+                          See PAYPAL_SANDBOX_SETUP.md for detailed instructions.
                         </p>
                       </div>
                     </div>
