@@ -41,6 +41,26 @@ import PayPalReturn from "./pages/PayPalReturn";
 import PayPalCancel from "./pages/PayPalCancel";
 import Loading from "./components/Loading";
 
+// PayPal Configuration
+// ⚠️ IMPORTANT SECURITY NOTE:
+// - PayPal Client ID is safe to expose in frontend (it's public)
+// - PayPal Secret Key should NEVER be in frontend code - only use server-side
+// - The secret key is stored in .env file but should only be used for server-side API calls
+// - For client-side PayPal integration, we only need the Client ID
+const PAYPAL_CONFIG = {
+  // PayPal Client ID from environment variables
+  // This is loaded from .env file: VITE_PAYPAL_CLIENT_ID
+  // Fallback to new Platform Partner App Client ID if .env is not loaded
+  clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || 'Aa1d32EXWKMFsgmQqm_Xri-h9FP6wDDQ4qqg2oLz2jjogpBxgBDLFdyksTZwooCQWVIy6qMXQwvULw-o',
+  // Default currency - can be overridden in component
+  currency: 'PHP',
+  
+  // ⚠️ SECRET KEY MUST NOT BE IN FRONTEND CODE
+  // The secret key is only for server-side operations (backend API calls)
+  // If you need to use the secret key, create a backend API endpoint
+  // secretKey: 'NEVER_PUT_SECRET_KEY_IN_FRONTEND_CODE'
+};
+
 // Error Boundary Component for better error handling
 const RouteErrorBoundary = ({ children }) => {
   const [hasError, setHasError] = React.useState(false);
@@ -93,6 +113,22 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Debug: Log PayPal configuration on app mount
+  React.useEffect(() => {
+    console.log('🔧 PayPal Configuration Check:', {
+      clientId: PAYPAL_CONFIG.clientId ? PAYPAL_CONFIG.clientId.substring(0, 20) + '...' : 'Not set',
+      fromEnv: !!import.meta.env.VITE_PAYPAL_CLIENT_ID,
+      envValue: import.meta.env.VITE_PAYPAL_CLIENT_ID ? import.meta.env.VITE_PAYPAL_CLIENT_ID.substring(0, 20) + '...' : 'Not set',
+      mode: import.meta.env.MODE
+    });
+    
+    if (PAYPAL_CONFIG.clientId) {
+      console.log('✅ PayPal Client ID is configured and ready to use');
+    } else {
+      console.error('❌ PayPal Client ID is missing! Check your .env file.');
+    }
+  }, []);
+
   if (loading) {
     return <RouteLoading />;
   }
@@ -111,6 +147,23 @@ const AppContent = () => {
   const { user, loading } = useAuth();
   const hideHeaderPaths = ['/host', '/listing', '/messages'];
   const shouldHide = hideHeaderPaths.some(path => location.pathname.startsWith(path));
+
+  // Verify PayPal Client ID is loaded on app startup
+  React.useEffect(() => {
+    if (PAYPAL_CONFIG.clientId) {
+      console.log('✅ PayPal Client ID loaded in App.jsx:', PAYPAL_CONFIG.clientId.substring(0, 20) + '...');
+      console.log('✅ PayPal integration is ready');
+    } else {
+      console.warn('⚠️ PayPal Client ID not found!');
+      console.warn('Please ensure VITE_PAYPAL_CLIENT_ID is set in your .env file');
+      console.warn('Current environment:', {
+        MODE: import.meta.env.MODE,
+        DEV: import.meta.env.DEV,
+        PROD: import.meta.env.PROD,
+        hasClientId: !!import.meta.env.VITE_PAYPAL_CLIENT_ID
+      });
+    }
+  }, []);
 
   // Create user profile for Google sign-in users and check host status
   React.useEffect(() => {
@@ -192,12 +245,16 @@ const AppContent = () => {
       {!shouldHide && <Header />}
       <main className="flex-1">
           <Routes>
-            {/* Default Route - Landing Page */}
+            {/* Default Route - Landing Page - Redirect if logged in */}
             <Route 
               path="/" 
               element={
                 <RouteErrorBoundary>
+                  {user && !loading ? (
+                    <Navigate to="/homestays" replace />
+                  ) : (
                   <LandingPage />
+                  )}
                 </RouteErrorBoundary>
               }
             />

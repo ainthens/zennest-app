@@ -400,23 +400,12 @@ const HostRegistration = () => {
             currency_code: 'PHP'
           },
           description: `Zennest Host Subscription - ${plan.name} Plan`,
-          item_list: {
-            items: [{
-              name: `${plan.name} Plan - ${plan.durationText}`,
-              quantity: '1',
-              unit_amount: {
-                value: plan.price.toFixed(2),
-                currency_code: 'PHP'
-              }
-            }]
-          }
+          custom_id: auth.currentUser.uid
         }],
         application_context: {
           brand_name: 'Zennest',
           landing_page: 'BILLING',
-          user_action: 'PAY_NOW',
-          return_url: window.location.href,
-          cancel_url: window.location.href
+          user_action: 'PAY_NOW'
         }
       });
     } catch (error) {
@@ -432,13 +421,11 @@ const HostRegistration = () => {
       console.log('Payment details:', JSON.stringify(details, null, 2));
       
       if (details.status === 'COMPLETED') {
-        // Retrieve the actual amount paid from PayPal order details
         const purchaseUnit = details.purchase_units?.[0];
         const amount = purchaseUnit?.amount;
         const paidAmount = amount?.value ? parseFloat(amount.value) : null;
         const currency = amount?.currency_code || 'PHP';
         
-        // Store payment details
         setPaymentDetails({
           paymentId: details.id,
           orderId: data.orderID,
@@ -449,20 +436,20 @@ const HostRegistration = () => {
           updateTime: details.update_time
         });
         
-        // Verify the amount matches the selected plan
         const selectedPlan = subscriptionPlans[formData.subscriptionPlan || 'pro'];
         if (paidAmount && Math.abs(paidAmount - selectedPlan.price) > 0.01) {
           console.warn(`Payment amount mismatch: Expected ${selectedPlan.price}, received ${paidAmount}`);
-          // Still proceed, but log the discrepancy
         }
         
         await handlePaymentSuccess(details.id, paidAmount || selectedPlan.price);
       } else {
         setError('Payment was not completed. Please try again.');
+        setLoading(false);
       }
     }).catch((error) => {
       console.error('PayPal payment error:', error);
       setError('Payment failed. Please try again or contact support.');
+      setLoading(false);
     });
   };
 
@@ -978,7 +965,7 @@ const HostRegistration = () => {
                   </div>
                 )}
 
-                {import.meta.env.VITE_PAYPAL_CLIENT_ID && import.meta.env.VITE_PAYPAL_CLIENT_ID !== 'your-paypal-client-id-here' ? (
+                {import.meta.env.VITE_PAYPAL_CLIENT_ID ? (
                   <div className="bg-gray-50 rounded-lg sm:rounded-xl p-4 sm:p-6 border-2 border-gray-200">
                     <PayPalScriptProvider
                       options={{
@@ -1013,6 +1000,7 @@ const HostRegistration = () => {
                           color: 'gold',
                           height: 45
                         }}
+                        disabled={!auth.currentUser}
                       />
                     </PayPalScriptProvider>
                   </div>
@@ -1029,11 +1017,8 @@ const HostRegistration = () => {
                         <p className="text-amber-700 text-xs mb-1">
                           Please add VITE_PAYPAL_CLIENT_ID to your environment variables.
                         </p>
-                        <p className="text-amber-600 text-xs mb-1">
-                          For Netlify: Go to Site settings → Environment variables → Add VITE_PAYPAL_CLIENT_ID
-                        </p>
                         <p className="text-amber-600 text-xs">
-                          See PAYPAL_SANDBOX_SETUP.md for detailed instructions.
+                          For Netlify: Site settings → Environment variables → Add VITE_PAYPAL_CLIENT_ID
                         </p>
                       </div>
                     </div>
