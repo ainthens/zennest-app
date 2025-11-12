@@ -337,6 +337,8 @@ const HostRegistration = () => {
   const handlePaymentSuccess = async (paymentId, paidAmount) => {
     try {
       setLoading(true);
+      setError('');
+      
       const user = auth.currentUser;
       
       if (!user) {
@@ -344,16 +346,29 @@ const HostRegistration = () => {
         setTimeout(() => {
           navigate('/login');
         }, 2000);
+        setLoading(false);
         return;
       }
 
       // Get subscription plan details
       const selectedPlan = subscriptionPlans[formData.subscriptionPlan || 'pro'];
       
+      if (!selectedPlan) {
+        throw new Error('Invalid subscription plan selected');
+      }
+      
       // Calculate subscription end date
       const startDate = new Date();
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + selectedPlan.duration);
+
+      console.log('💳 Updating subscription status...', {
+        userId: user.uid,
+        plan: formData.subscriptionPlan || 'pro',
+        paymentId: paymentId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      });
 
       // Update subscription status with plan details
       await updateSubscriptionStatus(
@@ -365,6 +380,8 @@ const HostRegistration = () => {
         endDate
       );
       
+      console.log('✅ Subscription status updated successfully');
+      
       // Reload user data to get latest state
       await user.reload();
       
@@ -374,9 +391,12 @@ const HostRegistration = () => {
       setLoading(false);
       
     } catch (error) {
-      console.error('Error updating subscription:', error);
-      setError('Payment processed but failed to activate subscription. Please contact support.');
+      console.error('❌ Error updating subscription:', error);
+      const errorMessage = error.message || 'Payment processed but failed to activate subscription. Please contact support with your payment ID.';
+      setError(errorMessage);
       setLoading(false);
+      
+      // Don't navigate away - let user see the error and try again
     }
   };
 
@@ -415,10 +435,14 @@ const HostRegistration = () => {
     }
   };
 
-  const onApprovePayPalOrder = (data, actions) => {
-    return actions.order.capture().then(async (details) => {
-      console.log('PayPal payment approved:', details);
-      console.log('Payment details:', JSON.stringify(details, null, 2));
+  const onApprovePayPalOrder = async (data, actions) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      const details = await actions.order.capture();
+      console.log('✅ PayPal payment approved:', details);
+      console.log('📋 Payment details:', JSON.stringify(details, null, 2));
       
       if (details.status === 'COMPLETED') {
         const purchaseUnit = details.purchase_units?.[0];
@@ -426,31 +450,47 @@ const HostRegistration = () => {
         const paidAmount = amount?.value ? parseFloat(amount.value) : null;
         const currency = amount?.currency_code || 'PHP';
         
+        // Verify user is still logged in
+        const user = auth.currentUser;
+        if (!user) {
+          setError('Session expired. Please log in and try again.');
+          setLoading(false);
+          return;
+        }
+        
+        // Get selected plan
+        const selectedPlan = subscriptionPlans[formData.subscriptionPlan || 'pro'];
+        
+        // Validate payment amount (allow small rounding differences)
+        if (paidAmount && Math.abs(paidAmount - selectedPlan.price) > 0.01) {
+          console.warn(`⚠️ Payment amount mismatch: Expected ${selectedPlan.price}, received ${paidAmount}`);
+          // Don't fail, but log the warning
+        }
+        
+        // Store payment details
         setPaymentDetails({
           paymentId: details.id,
           orderId: data.orderID,
-          paidAmount: paidAmount,
+          paidAmount: paidAmount || selectedPlan.price,
           currency: currency,
           payer: details.payer,
           createTime: details.create_time,
           updateTime: details.update_time
         });
         
-        const selectedPlan = subscriptionPlans[formData.subscriptionPlan || 'pro'];
-        if (paidAmount && Math.abs(paidAmount - selectedPlan.price) > 0.01) {
-          console.warn(`Payment amount mismatch: Expected ${selectedPlan.price}, received ${paidAmount}`);
-        }
-        
+        // Process payment success
         await handlePaymentSuccess(details.id, paidAmount || selectedPlan.price);
       } else {
-        setError('Payment was not completed. Please try again.');
+        console.error('❌ Payment not completed. Status:', details.status);
+        setError(`Payment was not completed. Status: ${details.status}. Please try again.`);
         setLoading(false);
       }
-    }).catch((error) => {
-      console.error('PayPal payment error:', error);
-      setError('Payment failed. Please try again or contact support.');
+    } catch (error) {
+      console.error('❌ PayPal payment error:', error);
+      const errorMessage = error.message || 'Payment failed. Please try again or contact support.';
+      setError(errorMessage);
       setLoading(false);
-    });
+    }
   };
 
   return (
@@ -979,18 +1019,19 @@ const HostRegistration = () => {
                         createOrder={createPayPalOrder}
                         onApprove={onApprovePayPalOrder}
                         onError={(err) => {
-                          console.error('PayPal error:', err);
+                          console.error('❌ PayPal error:', err);
                           console.error('Error details:', {
                             message: err.message,
                             name: err.name,
                             stack: err.stack
                           });
-                          setError(`Payment failed: ${err.message || 'Please try again.'}`);
+                          const errorMessage = err.message || 'Payment failed. Please try again.';
+                          setError(`Payment error: ${errorMessage}`);
                           setLoading(false);
                         }}
                         onCancel={(data) => {
-                          console.log('PayPal payment cancelled:', data);
-                          setError('Payment was cancelled.');
+                          console.log('❌ PayPal payment cancelled:', data);
+                          setError('Payment was cancelled. You can try again when ready.');
                           setLoading(false);
                         }}
                         style={{
@@ -1000,7 +1041,7 @@ const HostRegistration = () => {
                           color: 'gold',
                           height: 45
                         }}
-                        disabled={!auth.currentUser}
+                        disabled={!auth.currentUser || loading}
                       />
                     </PayPalScriptProvider>
                   </div>

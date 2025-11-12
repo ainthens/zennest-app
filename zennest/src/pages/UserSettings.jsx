@@ -741,20 +741,30 @@ const UserSettings = () => {
                               <h3 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
                                 Crop Your Photo
                               </h3>
-                              <ReactCrop
-                                crop={crop}
-                                onChange={(c) => setCrop(c)}
-                                onComplete={(c) => setCompletedCrop(c)}
-                                aspect={1}
-                                circularCrop
-                              >
-                                <img
-                                  ref={imgRef}
-                                  alt="Crop preview"
-                                  src={cropImage}
-                                  className="max-w-full"
-                                />
-                              </ReactCrop>
+                              <div className="w-full max-h-[60vh] overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+                                <ReactCrop
+                                  crop={crop}
+                                  onChange={(c) => setCrop(c)}
+                                  onComplete={(c) => setCompletedCrop(c)}
+                                  aspect={1}
+                                  circularCrop
+                                  className="max-w-full max-h-full"
+                                >
+                                  <img
+                                    ref={imgRef}
+                                    alt="Crop preview"
+                                    src={cropImage}
+                                    style={{
+                                      maxWidth: '100%',
+                                      maxHeight: '60vh',
+                                      width: 'auto',
+                                      height: 'auto',
+                                      objectFit: 'contain',
+                                      display: 'block'
+                                    }}
+                                  />
+                                </ReactCrop>
+                              </div>
 
                               <div className="flex gap-3">
                                 <motion.button

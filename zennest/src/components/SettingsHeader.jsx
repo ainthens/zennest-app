@@ -24,6 +24,8 @@ import {
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { getGuestProfile, getHostProfile } from "../services/firestoreService";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "../config/firebase";
 
 const SettingsHeader = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -44,29 +46,100 @@ const SettingsHeader = () => {
   const mobileDropdownRef = useRef(null);
   const [userProfile, setUserProfile] = useState(null);
 
-  // Fetch user profile picture from Firestore
+  // Fetch user profile picture from Firestore with real-time updates
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (user?.uid) {
-        try {
-          if (isHost) {
-            const result = await getHostProfile(user.uid);
-            if (result.success && result.data?.profilePicture) {
-              setUserProfile(result.data);
+    if (!user?.uid) {
+      setUserProfile(null);
+      return;
+    }
+
+    let unsubscribe = null;
+
+    try {
+      if (isHost) {
+        // Set up real-time listener for host profile
+        const hostRef = doc(db, 'hosts', user.uid);
+        unsubscribe = onSnapshot(
+          hostRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              console.log('✅ Host profile updated in real-time (SettingsHeader):', {
+                hasProfilePicture: !!data.profilePicture,
+                firstName: data.firstName,
+                lastName: data.lastName
+              });
+              setUserProfile(data);
+            } else {
+              console.warn('⚠️ Host profile does not exist');
+              setUserProfile(null);
             }
-          } else if (isGuest) {
-            const result = await getGuestProfile(user.uid);
-            if (result.success && result.data?.profilePicture) {
-              setUserProfile(result.data);
-            }
+          },
+          (error) => {
+            console.error('❌ Error listening to host profile:', error);
+            // Fallback to one-time fetch on error
+            getHostProfile(user.uid).then(result => {
+              if (result.success && result.data) {
+                setUserProfile(result.data);
+              }
+            });
           }
-        } catch (error) {
-          console.error("Error fetching user profile:", error);
-        }
+        );
+      } else if (isGuest) {
+        // Set up real-time listener for guest profile
+        const userRef = doc(db, 'users', user.uid);
+        unsubscribe = onSnapshot(
+          userRef,
+          (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              console.log('✅ Guest profile updated in real-time (SettingsHeader):', {
+                hasProfilePicture: !!data.profilePicture,
+                firstName: data.firstName,
+                lastName: data.lastName
+              });
+              setUserProfile(data);
+            } else {
+              console.warn('⚠️ Guest profile does not exist');
+              setUserProfile(null);
+            }
+          },
+          (error) => {
+            console.error('❌ Error listening to guest profile:', error);
+            // Fallback to one-time fetch on error
+            getGuestProfile(user.uid).then(result => {
+              if (result.success && result.data) {
+                setUserProfile(result.data);
+              }
+            });
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error setting up profile listener:", error);
+      // Fallback to one-time fetch
+      if (isHost) {
+        getHostProfile(user.uid).then(result => {
+          if (result.success && result.data) {
+            setUserProfile(result.data);
+          }
+        });
+      } else if (isGuest) {
+        getGuestProfile(user.uid).then(result => {
+          if (result.success && result.data) {
+            setUserProfile(result.data);
+          }
+        });
+      }
+    }
+
+    // Cleanup function to unsubscribe when component unmounts or dependencies change
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
     };
-    fetchUserProfile();
-  }, [user, isHost, isGuest]);
+  }, [user?.uid, isHost, isGuest]);
 
   // Keyboard navigation for dropdown menu
   useEffect(() => {

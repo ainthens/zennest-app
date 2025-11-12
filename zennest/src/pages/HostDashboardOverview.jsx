@@ -19,6 +19,8 @@ import {
   FaShare,
   FaChartLine
 } from 'react-icons/fa';
+import { onSnapshot, collection, addDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const HostDashboardOverview = () => {
   const { user } = useAuth();

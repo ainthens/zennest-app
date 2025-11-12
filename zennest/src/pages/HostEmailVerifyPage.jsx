@@ -143,7 +143,16 @@ const HostEmailVerifyPage = () => {
         return;
       }
       let user = auth.currentUser;
+      
+      // If user is already logged in, just update their profile
       if (user) {
+        // Verify the email matches
+        if (user.email !== emailToVerify) {
+          setError('Email mismatch. Please use the email associated with your account.');
+          setStatus('idle');
+          return;
+        }
+        
         const guestResult = await getGuestProfile(user.uid);
         let profileData = guestResult.success && guestResult.data ? guestResult.data : {};
         const finalFirstName = typeof firstName !== 'undefined' && firstName !== null ? firstName : (profileData.firstName || '');
@@ -178,24 +187,53 @@ const HostEmailVerifyPage = () => {
         }, 2000);
         return;
       }
+      
+      // If user is not logged in, we need to create account or sign in
       if (!password) {
         setError('Missing password for new registration. Please register again.');
         setStatus('idle');
         return;
       }
+      
       let userCredential;
       try {
-        const { createUserWithEmailAndPassword } = await import('firebase/auth');
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        user = userCredential.user;
-      } catch (firebaseErr) {
-        if (firebaseErr.code === 'auth/email-already-in-use') {
-          const { signInWithEmailAndPassword } = await import('firebase/auth');
-          userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('firebase/auth');
+        
+        // Try to create account first
+        try {
+          userCredential = await createUserWithEmailAndPassword(auth, emailToVerify, password);
           user = userCredential.user;
-        } else {
-          throw firebaseErr;
+          console.log('✅ New account created successfully');
+        } catch (createErr) {
+          // If email already exists, try to sign in
+          if (createErr.code === 'auth/email-already-in-use') {
+            console.log('📧 Email already exists, attempting to sign in...');
+            try {
+              userCredential = await signInWithEmailAndPassword(auth, emailToVerify, password);
+              user = userCredential.user;
+              console.log('✅ Signed in successfully');
+            } catch (signInErr) {
+              // If sign in fails, it's likely wrong password
+              if (signInErr.code === 'auth/wrong-password' || signInErr.code === 'auth/invalid-credential') {
+                setError('Incorrect password. Please use the password you used during registration, or reset your password.');
+                setStatus('idle');
+                return;
+              } else if (signInErr.code === 'auth/user-not-found') {
+                setError('Account not found. Please complete the registration process again.');
+                setStatus('idle');
+                return;
+              }
+              throw signInErr;
+            }
+          } else {
+            throw createErr;
+          }
         }
+      } catch (authErr) {
+        console.error('❌ Authentication error:', authErr);
+        setError(getAuthErrorMessage(authErr.code) || 'Authentication failed. Please try again.');
+        setStatus('idle');
+        return;
       }
       const guestResult = await getGuestProfile(user.uid);
       if (guestResult.success && guestResult.data) {

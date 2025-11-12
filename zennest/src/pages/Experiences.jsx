@@ -539,283 +539,285 @@ const Experiences = () => {
       </motion.section>
 
       {/* Experiences Grid Section */}
-      <section className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 sm:py-12 lg:py-16 xl:py-24 bg-slate-100">
-        <AnimatedSection className="text-center mb-6 sm:mb-8 lg:mb-12">
-          <motion.h2 
-            variants={fadeInUp}
-            className="text-xl sm:text-2xl md:text-3xl font-semibold text-emerald-900 mb-2 sm:mb-3"
-          >
-            Featured Experiences
-          </motion.h2>
-          <motion.p 
-            variants={fadeInUp}
-            className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-2"
-          >
-            Handpicked activities and tours that showcase the best of local culture and adventure
-          </motion.p>
-        </AnimatedSection>
+      <div className="w-full bg-slate-100">
+        <section className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 sm:py-12 lg:py-16 xl:py-24">
+          <AnimatedSection className="text-center mb-6 sm:mb-8 lg:mb-12">
+            <motion.h2 
+              variants={fadeInUp}
+              className="text-xl sm:text-2xl md:text-3xl font-semibold text-emerald-900 mb-2 sm:mb-3"
+            >
+              Featured Experiences
+            </motion.h2>
+            <motion.p 
+              variants={fadeInUp}
+              className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-2"
+            >
+              Handpicked activities and tours that showcase the best of local culture and adventure
+            </motion.p>
+          </AnimatedSection>
 
-        {/* Filters and Search Section */}
-        <AnimatedSection className="mb-6 sm:mb-8">
-          <Filters
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            selectedLocation={selectedLocation}
-            setSelectedLocation={setSelectedLocation}
-            priceRange={priceRange}
-            setPriceRange={setPriceRange}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            categories={experienceCategories}
-            categoryLabels={categoryLabels}
-            locations={locations}
-            filteredCount={filteredExperiences.length}
-            totalCount={experiences.length}
-            priceRangeOptions={[
-              { value: 'low', label: 'Under ₱2,000' },
-              { value: 'medium', label: '₱2,000 - ₱5,000' },
-              { value: 'high', label: 'Over ₱5,000' }
-            ]}
-            sortOptions={[
-              { value: 'featured', label: 'Featured' },
-              { value: 'price-low', label: 'Price: Low to High' },
-              { value: 'price-high', label: 'Price: High to Low' },
-              { value: 'rating', label: 'Highest Rated' },
-              { value: 'name', label: 'Name A-Z' }
-            ]}
-            searchPlaceholder="Search experiences..."
-            itemLabel="experiences"
-          />
-        </AnimatedSection>
+          {/* Filters and Search Section */}
+          <AnimatedSection className="mb-6 sm:mb-8">
+            <Filters
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedLocation={selectedLocation}
+              setSelectedLocation={setSelectedLocation}
+              priceRange={priceRange}
+              setPriceRange={setPriceRange}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              categories={experienceCategories}
+              categoryLabels={categoryLabels}
+              locations={locations}
+              filteredCount={filteredExperiences.length}
+              totalCount={experiences.length}
+              priceRangeOptions={[
+                { value: 'low', label: 'Under ₱2,000' },
+                { value: 'medium', label: '₱2,000 - ₱5,000' },
+                { value: 'high', label: 'Over ₱5,000' }
+              ]}
+              sortOptions={[
+                { value: 'featured', label: 'Featured' },
+                { value: 'price-low', label: 'Price: Low to High' },
+                { value: 'price-high', label: 'Price: High to Low' },
+                { value: 'rating', label: 'Highest Rated' },
+                { value: 'name', label: 'Name A-Z' }
+              ]}
+              searchPlaceholder="Search experiences..."
+              itemLabel="experiences"
+            />
+          </AnimatedSection>
 
-        {/* Experiences Grid */}
-        <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
-          {loading ? (
-            <div className="col-span-full">
-              <Loading message="Loading experiences..." size="medium" fullScreen={false} />
-            </div>
-          ) : filteredExperiences.length === 0 ? (
-            <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl shadow-inner p-8 sm:p-12 lg:p-16 text-center border-2 border-dashed border-gray-300">
-              <div className="mb-4 sm:mb-6">
-                <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-full shadow-lg mb-3 sm:mb-4">
-                  <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
+          {/* Experiences Grid */}
+          <AnimatedGrid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-6">
+            {loading ? (
+              <div className="col-span-full">
+                <Loading message="Loading experiences..." size="medium" fullScreen={false} />
               </div>
-              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1.5 sm:mb-2">No experiences found</h3>
-              <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto mb-4 sm:mb-6 px-2">
-                {searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all' 
-                  ? 'Try adjusting your filters to see more results.'
-                  : "We're curating amazing local experiences for you. Check back soon for adventures!"}
-              </p>
-              {(searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all') && (
-                <button
-                  onClick={() => {
-                    setSelectedCategory('all');
-                    setSelectedLocation('all');
-                    setPriceRange('all');
-                    setSearchQuery('');
-                  }}
-                  className="px-4 sm:px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-xs sm:text-sm"
-                >
-                  Clear Filters
-                </button>
-              )}
-            </div>
-          ) : (
-            paginatedExperiences.map((experience) => (
-              <AnimatedCard key={experience.id} delay={experience.delay}>
-                <motion.div 
-                  whileHover={{ y: -8, scale: 1.02 }}
-                  onClick={() => handleViewDetails(experience)}
-                  className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200/60 hover:border-emerald-200 group cursor-pointer h-full flex flex-col relative"
-                >
-                  {/* Experience Image */}
-                  <div className="relative h-40 sm:h-48 md:h-52 lg:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
-                    {experience.image ? (
-                      <>
-                        <img 
-                          src={experience.image} 
-                          alt={experience.title}
-                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                      </>
-                    ) : (
-                      <div className={`absolute inset-0 bg-gradient-to-br ${experience.color || 'from-emerald-500 to-emerald-600'}`}></div>
-                    )}
-                    
-                    {/* Rating Badge */}
-                    {experience.rating > 0 && (
-                      <div className="absolute left-2 sm:left-3 bottom-2 sm:bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
-                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
-                          <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
-                        </svg>
-                        <span>{experience.rating.toFixed(1)}</span>
-                      </div>
-                    )}
-
-                    {/* Discount Badge */}
-                    {experience.discount > 0 && (
-                      <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
-                        {experience.discount}% OFF
-                      </div>
-                    )}
-
-                    {/* Location Badge */}
-                    {experience.location && (
-                      <div className="absolute top-2 sm:top-3 left-2 sm:left-3 bg-white/95 backdrop-blur-sm text-gray-900 rounded-lg px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold shadow-sm border border-gray-200/60 flex items-center gap-1 sm:gap-1.5 z-10">
-                        <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span className="truncate max-w-[80px] sm:max-w-[100px]">{experience.location}</span>
-                      </div>
-                    )}
+            ) : filteredExperiences.length === 0 ? (
+              <div className="col-span-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl sm:rounded-2xl shadow-inner p-8 sm:p-12 lg:p-16 text-center border-2 border-dashed border-gray-300">
+                <div className="mb-4 sm:mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-full shadow-lg mb-3 sm:mb-4">
+                    <svg className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
-                  
-                  {/* Experience Content */}
-                  <div className="p-3 sm:p-4 lg:p-5 flex-1 flex flex-col">
-                    {/* Title */}
-                    <div className="mb-2 sm:mb-3">
-                      <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-1.5 sm:mb-2 group-hover:text-emerald-700 transition-colors">
-                        {experience.title}
-                      </h2>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-gray-600 text-xs sm:text-sm leading-relaxed line-clamp-2 mb-2 sm:mb-3 flex-1">
-                      {experience.description}
-                    </p>
-
-                    {/* Guests Badge */}
-                    {experience.guests > 0 && (
-                      <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">
-                        <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="font-semibold text-gray-900">Up to {experience.guests}</span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-gray-600">{experience.guests === 1 ? 'guest' : 'guests'}</span>
-                      </div>
-                    )}
-
-                    {/* Price and CTA */}
-                    <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-100">
-                      <div className="flex items-center justify-between gap-2 sm:gap-3">
-                        <div className="min-w-0 flex-1">
-                          {experience.discount > 0 ? (
-                            <div>
-                              <div className="flex items-baseline gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                                <span className="text-lg sm:text-xl font-bold text-emerald-600">
-                                  ₱{((experience.price || 0) * (1 - experience.discount / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                                </span>
-                                <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">
-                                  ₱{(experience.price || 0).toLocaleString()}
-                                </span>
-                                <span className="text-[10px] sm:text-xs text-red-600 font-bold bg-red-50 px-1.5 sm:px-2 py-0.5 rounded">
-                                  -{experience.discount}%
-                                </span>
-                              </div>
-                              <p className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">per person</p>
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="text-lg sm:text-xl font-bold text-emerald-600">₱{(experience.price || 0).toLocaleString()}</span>
-                              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 whitespace-nowrap">per person</p>
-                            </div>
-                          )}
-                        </div>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewDetails(experience);
-                          }}
-                          className="bg-emerald-600 text-white py-2 sm:py-2.5 px-3 sm:px-5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
-                        >
-                          Book
-                          <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1.5 sm:mb-2">No experiences found</h3>
+                <p className="text-sm sm:text-base text-gray-600 max-w-md mx-auto mb-4 sm:mb-6 px-2">
+                  {searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all' 
+                    ? 'Try adjusting your filters to see more results.'
+                    : "We're curating amazing local experiences for you. Check back soon for adventures!"}
+                </p>
+                {(searchQuery || selectedCategory !== 'all' || selectedLocation !== 'all' || priceRange !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setSelectedCategory('all');
+                      setSelectedLocation('all');
+                      setPriceRange('all');
+                      setSearchQuery('');
+                    }}
+                    className="px-4 sm:px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-xs sm:text-sm"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              paginatedExperiences.map((experience) => (
+                <AnimatedCard key={experience.id} delay={experience.delay}>
+                  <motion.div 
+                    whileHover={{ y: -8, scale: 1.02 }}
+                    onClick={() => handleViewDetails(experience)}
+                    className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-200/60 hover:border-emerald-200 group cursor-pointer h-full flex flex-col relative"
+                  >
+                    {/* Experience Image */}
+                    <div className="relative h-40 sm:h-48 md:h-52 lg:h-56 w-full overflow-hidden bg-gradient-to-r from-emerald-500 to-emerald-600">
+                      {experience.image ? (
+                        <>
+                          <img 
+                            src={experience.image} 
+                            alt={experience.title}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        </>
+                      ) : (
+                        <div className={`absolute inset-0 bg-gradient-to-br ${experience.color || 'from-emerald-500 to-emerald-600'}`}></div>
+                      )}
+                      
+                      {/* Rating Badge */}
+                      {experience.rating > 0 && (
+                        <div className="absolute left-2 sm:left-3 bottom-2 sm:bottom-3 bg-white/95 backdrop-blur-sm text-gray-800 text-xs sm:text-sm font-semibold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm border border-gray-200/60 flex items-center gap-1 z-10">
+                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-400 fill-current" viewBox="0 0 20 20">
+                            <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
                           </svg>
-                        </button>
+                          <span>{experience.rating.toFixed(1)}</span>
+                        </div>
+                      )}
+
+                      {/* Discount Badge */}
+                      {experience.discount > 0 && (
+                        <div className="absolute top-2 sm:top-3 right-2 sm:right-3 bg-gradient-to-r from-red-500 to-red-600 text-white text-[10px] sm:text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg shadow-lg z-10 border-2 border-white/50">
+                          {experience.discount}% OFF
+                        </div>
+                      )}
+
+                      {/* Location Badge */}
+                      {experience.location && (
+                        <div className="absolute top-2 sm:top-3 left-2 sm:left-3 bg-white/95 backdrop-blur-sm text-gray-900 rounded-lg px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold shadow-sm border border-gray-200/60 flex items-center gap-1 sm:gap-1.5 z-10">
+                          <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                          </svg>
+                          <span className="truncate max-w-[80px] sm:max-w-[100px]">{experience.location}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Experience Content */}
+                    <div className="p-3 sm:p-4 lg:p-5 flex-1 flex flex-col">
+                      {/* Title */}
+                      <div className="mb-2 sm:mb-3">
+                        <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 line-clamp-2 leading-tight mb-1.5 sm:mb-2 group-hover:text-emerald-700 transition-colors">
+                          {experience.title}
+                        </h2>
+                      </div>
+
+                      {/* Description */}
+                      <p className="text-gray-600 text-xs sm:text-sm leading-relaxed line-clamp-2 mb-2 sm:mb-3 flex-1">
+                        {experience.description}
+                      </p>
+
+                      {/* Guests Badge */}
+                      {experience.guests > 0 && (
+                        <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">
+                          <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span className="font-semibold text-gray-900">Up to {experience.guests}</span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-gray-600">{experience.guests === 1 ? 'guest' : 'guests'}</span>
+                        </div>
+                      )}
+
+                      {/* Price and CTA */}
+                      <div className="mt-auto pt-3 sm:pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between gap-2 sm:gap-3">
+                          <div className="min-w-0 flex-1">
+                            {experience.discount > 0 ? (
+                              <div>
+                                <div className="flex items-baseline gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
+                                  <span className="text-lg sm:text-xl font-bold text-emerald-600">
+                                    ₱{((experience.price || 0) * (1 - experience.discount / 100)).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                                  </span>
+                                  <span className="text-xs sm:text-sm text-gray-400 line-through font-medium">
+                                    ₱{(experience.price || 0).toLocaleString()}
+                                  </span>
+                                  <span className="text-[10px] sm:text-xs text-red-600 font-bold bg-red-50 px-1.5 sm:px-2 py-0.5 rounded">
+                                    -{experience.discount}%
+                                  </span>
+                                </div>
+                                <p className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">per person</p>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-lg sm:text-xl font-bold text-emerald-600">₱{(experience.price || 0).toLocaleString()}</span>
+                                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 whitespace-nowrap">per person</p>
+                              </div>
+                            )}
+                          </div>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewDetails(experience);
+                            }}
+                            className="bg-emerald-600 text-white py-2 sm:py-2.5 px-3 sm:px-5 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-all duration-200 transform hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 flex-shrink-0"
+                          >
+                            Book
+                            <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Hover effect border */}
-                  <div className="absolute inset-0 border-2 border-transparent group-hover:border-emerald-200 rounded-2xl pointer-events-none transition-all duration-300"></div>
-                </motion.div>
-              </AnimatedCard>
-            ))
-          )}
-        </AnimatedGrid>
+                    {/* Hover effect border */}
+                    <div className="absolute inset-0 border-2 border-transparent group-hover:border-emerald-200 rounded-2xl pointer-events-none transition-all duration-300"></div>
+                  </motion.div>
+                </AnimatedCard>
+              ))
+            )}
+          </AnimatedGrid>
 
-        {/* Pagination */}
-        {filteredExperiences.length > itemsPerPage && (
-          <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
-            >
-              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="hidden sm:inline">Previous</span>
-              <span className="sm:hidden">Prev</span>
-            </button>
-            
-            <div className="flex items-center gap-1 sm:gap-2">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
-                        currentPage === page
-                          ? 'bg-emerald-600 text-white'
-                          : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                } else if (page === currentPage - 2 || page === currentPage + 2) {
-                  return <span key={page} className="px-1 sm:px-2 text-gray-400 text-xs sm:text-sm">...</span>;
-                }
-                return null;
-              })}
+          {/* Pagination */}
+          {filteredExperiences.length > itemsPerPage && (
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 mt-6 sm:mt-8 pt-6 sm:pt-8 border-t border-gray-200">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
+              >
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                <span className="hidden sm:inline">Previous</span>
+                <span className="sm:hidden">Prev</span>
+              </button>
+              
+              <div className="flex items-center gap-1 sm:gap-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm ${
+                          currentPage === page
+                            ? 'bg-emerald-600 text-white'
+                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (page === currentPage - 2 || page === currentPage + 2) {
+                    return <span key={page} className="px-1 sm:px-2 text-gray-400 text-xs sm:text-sm">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <span className="sm:hidden">Next</span>
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
+          )}
 
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
-            >
-              <span className="hidden sm:inline">Next</span>
-              <span className="sm:hidden">Next</span>
-              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Results info */}
-        {filteredExperiences.length > 0 && (
-          <div className="text-center mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600">
-            Showing {startIndex + 1} - {Math.min(endIndex, filteredExperiences.length)} of {filteredExperiences.length} experiences
-          </div>
-        )}
-      </section>
+          {/* Results info */}
+          {filteredExperiences.length > 0 && (
+            <div className="text-center mt-3 sm:mt-4 text-xs sm:text-sm text-gray-600">
+              Showing {startIndex + 1} - {Math.min(endIndex, filteredExperiences.length)} of {filteredExperiences.length} experiences
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 };

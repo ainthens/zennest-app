@@ -33,6 +33,7 @@ const HostMessages = () => {
   const [isGuestTyping, setIsGuestTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const messageInputRef = useRef(null);
   const fetchedProfilesRef = useRef(new Set()); // Track which profiles have been fetched
   const [failedImages, setFailedImages] = useState(new Set()); // Track failed image URLs
   const [deletingId, setDeletingId] = useState(null); // Track which message is being deleted
@@ -255,6 +256,10 @@ const HostMessages = () => {
     if (window.innerWidth < 768) {
       setShowConversationList(false);
     }
+    // Focus input when conversation is selected (especially on mobile)
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 300);
   };
 
   const handleBackToConversations = () => {

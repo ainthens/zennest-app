@@ -56,6 +56,7 @@ const UserMessages = () => {
   const [showDeleteMenu, setShowDeleteMenu] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   // Get conversation ID from URL params
   useEffect(() => {
@@ -265,6 +266,12 @@ const UserMessages = () => {
       if (result.success) {
         setNewMessage('');
         scrollToBottom();
+        // Keep input focused after sending - use requestAnimationFrame for better reliability
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            messageInputRef.current?.focus();
+          }, 10);
+        });
       } else {
         alert('Failed to send message. Please try again.');
       }
@@ -273,12 +280,22 @@ const UserMessages = () => {
       alert('Failed to send message. Please try again.');
     } finally {
       setSending(false);
+      // Keep input focused even on error
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          messageInputRef.current?.focus();
+        }, 10);
+      });
     }
   };
 
   const handleSelectConversation = (conversationId) => {
     setSelectedConversationId(conversationId);
     setSearchParams({ conversation: conversationId });
+    // Focus input when conversation is selected (especially on mobile)
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 300);
   };
 
   const handleBackToInbox = () => {
@@ -463,7 +480,7 @@ const UserMessages = () => {
                 md:col-span-4 lg:col-span-3 
                 ${selectedConversationId ? 'hidden md:block' : 'block'}
                 bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col
-                h-full
+                h-full max-h-[calc(100vh-12rem)] sm:max-h-[calc(100vh-14rem)] md:max-h-[calc(100vh-16rem)]
               `}>
                 {/* Search Bar */}
                 <div className="p-3 sm:p-4 border-b border-gray-200">
@@ -620,20 +637,23 @@ const UserMessages = () => {
                 md:col-span-8 lg:col-span-9
                 ${selectedConversationId ? 'block' : 'hidden md:flex'}
                 bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col
-                h-full
+                h-full max-h-[calc(100vh-12rem)] sm:max-h-[calc(100vh-14rem)] md:max-h-[calc(100vh-16rem)]
               `}>
                 {selectedConversationId && selectedConversation ? (
                   <>
-                    {/* Conversation Header */}
-                    <div className="bg-gradient-to-r from-emerald-600 to-emerald-700 text-white p-3 sm:p-4 flex items-center justify-between border-b border-emerald-800">
+                    {/* Conversation Header - Sticky on mobile */}
+                    <div className="sticky top-0 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white p-3 sm:p-4 flex items-center justify-between border-b border-emerald-800 z-20 shadow-md">
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
                         {/* Back Button (Mobile Only) */}
-                        <button
+                        <motion.button
                           onClick={handleBackToInbox}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
                           className="md:hidden p-1.5 sm:p-2 hover:bg-emerald-700 rounded-lg transition-colors flex-shrink-0"
+                          aria-label="Back to inbox"
                         >
                           <FaArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
+                        </motion.button>
 
                         {/* User Info */}
                         <div className={`
@@ -684,8 +704,8 @@ const UserMessages = () => {
                       </button>
                     </div>
 
-                    {/* Messages Area */}
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50">
+                    {/* Messages Area - Enhanced mobile experience */}
+                    <div className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 pb-2 sm:pb-4 space-y-2 sm:space-y-3 bg-gradient-to-b from-slate-50 via-white to-white" style={{ scrollBehavior: 'smooth' }}>
                       {messagesLoading ? (
                         <div className="flex items-center justify-center h-full">
                           <FaSpinner className="w-8 h-8 text-emerald-600 animate-spin" />
@@ -746,16 +766,16 @@ const UserMessages = () => {
                                   )}
                                 </div>
 
-                                <div className="flex flex-col gap-0.5 max-w-[85%] sm:max-w-[70%]">
-                                  {/* Message Bubble */}
+                                <div className="flex flex-col gap-1 max-w-[85%] sm:max-w-[70%]">
+                                  {/* Message Bubble - Enhanced mobile design */}
                                   <div className={`
-                                    px-4 py-2 rounded-2xl
+                                    px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl shadow-sm
                                     ${isOwnMessage 
-                                      ? 'bg-emerald-600 text-white rounded-br-none' 
-                                      : 'bg-white text-gray-800 rounded-bl-none shadow-sm border border-gray-200'
+                                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-br-sm' 
+                                      : 'bg-white text-gray-800 rounded-bl-sm border border-gray-200'
                                     }
                                   `}>
-                                    <p className="text-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                                    <p className="text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap" style={{ fontFamily: 'Poppins, sans-serif' }}>
                                       {message.text || message.content}
                                     </p>
                                   </div>
@@ -763,7 +783,7 @@ const UserMessages = () => {
                                   {/* Timestamp below message */}
                                   {showAvatar && (
                                     <p className={`
-                                      text-xs text-gray-500 px-2
+                                      text-[10px] sm:text-xs text-gray-400 px-2
                                       ${isOwnMessage ? 'text-right' : 'text-left'}
                                     `} style={{ fontFamily: 'Poppins, sans-serif' }}>
                                       {formatMessageTime(message.createdAt)}
@@ -808,27 +828,61 @@ const UserMessages = () => {
                       )}
                     </div>
 
-                    {/* Message Input */}
-                    <form onSubmit={handleSendMessage} className="p-3 sm:p-4 bg-white border-t border-gray-200">
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <input
-                          type="text"
-                          value={newMessage}
-                          onChange={(e) => {
-                            setNewMessage(e.target.value);
-                            handleTyping();
-                          }}
-                          placeholder="Type your message..."
-                          className="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base bg-gray-50 border border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all outline-none"
-                          style={{ fontFamily: 'Poppins, sans-serif' }}
-                          disabled={sending}
-                        />
+                    {/* Message Input - Enhanced mobile experience */}
+                    <form 
+                      onSubmit={handleSendMessage} 
+                      className="sticky bottom-0 p-2.5 sm:p-3 md:p-4 bg-white border-t border-gray-200 shadow-lg sm:shadow-md z-10"
+                      onClick={() => {
+                        // Focus input when form is clicked (especially on mobile)
+                        requestAnimationFrame(() => {
+                          messageInputRef.current?.focus();
+                        });
+                      }}
+                    >
+                      <div className="flex items-end gap-2 sm:gap-3">
+                        <div className="flex-1 relative">
+                          <input
+                            ref={messageInputRef}
+                            type="text"
+                            value={newMessage}
+                            onChange={(e) => {
+                              setNewMessage(e.target.value);
+                              handleTyping();
+                            }}
+                            onBlur={(e) => {
+                              // Prevent blur on mobile when keyboard might close
+                              // Only allow blur if clicking outside the form
+                              const relatedTarget = e.relatedTarget;
+                              if (!relatedTarget || !e.currentTarget.form?.contains(relatedTarget)) {
+                                // Small delay to allow focus to return if needed
+                                setTimeout(() => {
+                                  if (selectedConversationId && document.activeElement !== messageInputRef.current) {
+                                    messageInputRef.current?.focus();
+                                  }
+                                }, 100);
+                              }
+                            }}
+                            placeholder="Type your message..."
+                            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base bg-gray-50 border-2 border-gray-200 rounded-xl sm:rounded-2xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-all outline-none resize-none"
+                            style={{ fontFamily: 'Poppins, sans-serif' }}
+                            disabled={sending}
+                            autoFocus={selectedConversationId ? true : false}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            autoCapitalize="sentences"
+                          />
+                        </div>
                         <motion.button
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           type="submit"
                           disabled={!newMessage.trim() || sending}
-                          className="p-2.5 sm:p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                          className="p-2.5 sm:p-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-xl sm:rounded-2xl hover:from-emerald-700 hover:to-emerald-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 shadow-md hover:shadow-lg active:scale-95"
+                          aria-label="Send message"
+                          onClick={(e) => {
+                            // Prevent form click from interfering
+                            e.stopPropagation();
+                          }}
                         >
                           {sending ? (
                             <FaSpinner className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />

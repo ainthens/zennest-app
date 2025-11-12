@@ -297,6 +297,13 @@ const HostListings = () => {
                   >
                     <FaTrash />
                   </button>
+                  <button
+                    onClick={() => navigate(`/listings/${listing.id}`)}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                  >
+                    <FaEye />
+                    View
+                  </button>
                 </div>
               </div>
             </motion.div>

@@ -56,11 +56,11 @@ const PayPalButtonsWrapper = ({
   currency,
   onCurrencyFallback
 }) => {
-  const [{ options, loadingStatus }, dispatch] = usePayPalScriptReducer();
+  const [{ options, isPending, isResolved, isRejected }, dispatch] = usePayPalScriptReducer();
 
   // When the script fails to load, loadingStatus becomes 'REJECTED'
   useEffect(() => {
-    if (loadingStatus === 'REJECTED') {
+    if (isRejected) {
       console.error('❌ PayPal SDK script loading REJECTED for options:', options);
 
       // If we tried PHP and it failed, attempt USD as a fallback (once)
@@ -79,22 +79,61 @@ const PayPalButtonsWrapper = ({
         });
       }
     }
-  }, [loadingStatus, options, dispatch, currency, onCurrencyFallback]);
+  }, [isRejected, options, dispatch, currency, onCurrencyFallback]);
+
+  if (isPending) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
+
+  if (isRejected) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+        Failed to load PayPal. Please try again or use another payment method.
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <PayPalButtons
-        style={style}
-        createOrder={createOrder}
-        onApprove={onApprove}
-        onCancel={onCancel}
-        onError={(err) => {
-          console.error('PayPal Buttons onError:', err);
-          if (onError) onError(err);
-        }}
-        // key ensures re-render when our forceReinitKey changes (e.g., currency switched)
-        key={forceReinitKey}
-      />
+    <div className="w-full overflow-hidden relative z-0" style={{ isolation: 'isolate' }}>
+      <div className="w-full max-w-full min-w-[200px] relative z-0">
+        <PayPalButtons
+          style={style}
+          createOrder={createOrder}
+          onApprove={onApprove}
+          onCancel={onCancel}
+          onError={(err) => {
+            console.error('PayPal Buttons onError:', err);
+            if (onError) onError(err);
+          }}
+          // key ensures re-render when our forceReinitKey changes (e.g., currency switched)
+          key={forceReinitKey}
+        />
+      </div>
+      <style>{`
+        /* Ensure PayPal iframe doesn't overlap navigation */
+        [id*="paypal-button-container"],
+        [id*="paypal-button"],
+        iframe[title*="PayPal"],
+        iframe[src*="paypal"],
+        div[id*="paypal"] {
+          position: relative !important;
+          z-index: 1 !important;
+        }
+        
+        /* Ensure header stays above PayPal elements */
+        header.fixed {
+          z-index: 50 !important;
+        }
+        
+        /* Prevent any PayPal elements from appearing above header */
+        body header {
+          z-index: 9999 !important;
+        }
+      `}</style>
     </div>
   );
 };
@@ -809,7 +848,8 @@ const PaymentProcessing = () => {
         paidAmount: parseFloat(amount),
         amount: parseFloat(amount),
         currency,
-        raw: details
+        raw: details,
+        bookingId: pendingBookingId
       });
     } catch (e) {
       console.error('onApprovePayPalOrder error:', e);
@@ -839,7 +879,7 @@ const PaymentProcessing = () => {
     } catch (e) {
       console.error('Currency fallback error:', e);
     }
-  }, []);
+  }, [paypalCurrency]);
 
   if (loading) {
     return (
@@ -888,8 +928,8 @@ const PaymentProcessing = () => {
   return (
     <>
       <SettingsHeader />
-      <div className="min-h-screen bg-slate-50 pt-20 pb-12">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-slate-50 pt-20 pb-12 relative z-0">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-0">
           {/* Progress Steps */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between">
@@ -1149,103 +1189,13 @@ const PaymentProcessing = () => {
                   Continue <FaChevronRight className="w-3 h-3" />
                 </button>
               ) : (
-                <>
-                  {/* PayPal buttons when PayPal/Credit Card is selected and paymentTiming is 'now' */}
-                  {(paymentMethod === 'paypal' || paymentMethod === 'creditcard') && paymentTiming === 'now' ? (
-                    <div className="w-full space-y-4">
-                      <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
-                        <h3 className="font-semibold text-gray-900 mb-3 text-sm">{paymentMethod === 'creditcard' ? 'Pay with Credit Card' : 'Pay with PayPal'}</h3>
-
-                        {/* Show PayPal client id / sdk info / errors */}
-                        {!paypalClientId && (
-                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg space-y-2">
-                            <p className="text-sm font-semibold text-red-800">PayPal Client ID is not configured</p>
-                            <p className="text-xs text-red-700">Please set VITE_PAYPAL_CLIENT_ID in your environment or window.PAYPAL_CLIENT_ID before attempting PayPal payments.</p>
-                          </div>
-                        )}
-
-                        {/* If there is a non-critical PayPal error state */}
-                        {paypalError && (
-                          <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <p className="text-sm font-semibold text-red-800">Payment error</p>
-                            <p className="text-xs text-red-700">{paypalError}</p>
-                          </div>
-                        )}
-
-                        {/* PayPalScriptProvider - single loader */}
-                        {paypalClientId && currentBookingData && finalTotal > 0 && (
-                          <PayPalScriptProvider
-                            options={{
-                              'client-id': paypalClientId,
-                              currency: paypalCurrency,
-                              intent: 'capture',
-                              components: 'buttons'
-                            }}
-                          >
-                            <PayPalButtonsWrapper
-                              createOrder={createPayPalOrder}
-                              onApprove={onApprovePayPalOrder}
-                              onCancel={onCancelPayPalOrder}
-                              onError={(err) => {
-                                console.error('PayPalButtons onError:', err);
-                                setPaypalError('PayPal error. Please try again.');
-                              }}
-                              style={{ layout: 'vertical' }}
-                              forceReinitKey={forceReinitKey}
-                              currency={paypalCurrency}
-                              onCurrencyFallback={handleCurrencyFallback}
-                            />
-                          </PayPalScriptProvider>
-                        )}
-
-                        {/* If currency is PHP and we've auto-switched, show a small notice */}
-                        {paypalCurrency === 'USD' && currencySwitched && (
-                          <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                            <p className="font-semibold text-yellow-800">Using USD for testing</p>
-                            <p className="text-xs text-yellow-700">PayPal sandbox may not support PHP. We've switched to USD automatically for this session. For production, switch back to PHP.</p>
-                            <div className="flex gap-2 mt-2">
-                              <button onClick={() => {
-                                // Give user ability to try PHP again (will reset script options)
-                                sessionStorage.setItem('paypalCurrency', 'PHP');
-                                setPaypalCurrency('PHP');
-                                setCurrencySwitched(false);
-                                setForceReinitKey(k => k + 1);
-                                console.log('User requested to try PHP again');
-                              }} className="px-3 py-1 bg-yellow-600 text-white rounded text-xs">Try PHP Again</button>
-                              <button onClick={() => {
-                                // Persist USD as preference
-                                sessionStorage.setItem('paypalCurrency', 'USD');
-                                setPaypalCurrency('USD');
-                                setCurrencySwitched(true);
-                                setForceReinitKey(k => k + 1);
-                                console.log('User confirmed USD preference');
-                              }} className="px-3 py-1 bg-gray-200 rounded text-xs">Keep USD</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Final confirm button (text fallback) */}
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { /* no-op: payment handled by PayPal Buttons */ }}
-                          disabled
-                          className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg text-sm font-medium cursor-not-allowed"
-                        >
-                          Confirm (Use PayPal above)
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 text-center text-sm text-gray-500">
-                      {currentStep === 4 && paymentMethod === 'wallet' && (
-                        <p className="mb-2"><FaInfoCircle className="inline-block mr-1.5 text-emerald-600" /> You have selected to pay with your wallet balance.</p>
-                      )}
-                      <p className="font-semibold text-gray-900">By clicking "Continue", you agree to our <a href="/terms" className="text-emerald-600 hover:underline">Terms of Service</a> and <a href="/privacy" className="text-emerald-600 hover:underline">Privacy Policy</a>.</p>
-                    </div>
-                  )}
-                </>
+                <button
+                  onClick={handleCompleteBooking}
+                  disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
+                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processing ? 'Processing...' : 'Complete Booking'}
+                </button>
               )}
             </div>
           </div>
