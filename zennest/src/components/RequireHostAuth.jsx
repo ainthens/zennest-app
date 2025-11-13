@@ -2,63 +2,20 @@
 import React, { useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import { getHostProfile, getGuestProfile } from "../services/firestoreService";
+import useActiveRole from "../hooks/useActiveRole";
 import Loading from "./Loading";
 import { FaExclamationTriangle } from "react-icons/fa";
 import { motion } from "framer-motion";
 
 const RequireHostAuth = ({ children }) => {
   const { user, loading } = useAuth();
+  const { activeRole, hasHost, loading: roleLoading } = useActiveRole();
   const location = useLocation();
-  const [checkingHost, setCheckingHost] = useState(true);
-  const [isHost, setIsHost] = useState(false);
   const [error, setError] = useState(null);
 
-  React.useEffect(() => {
-    const checkHostStatus = async () => {
-      if (!user) {
-        setCheckingHost(false);
-        return;
-      }
-
-      try {
-        // Check if user is a host
-        const hostResult = await getHostProfile(user.uid);
-        if (hostResult.success && hostResult.data) {
-          // Verify the role is actually 'host' in the profile
-          const role = hostResult.data.role;
-          if (role === 'host') {
-            setIsHost(true);
-          } else {
-            // Profile exists but role is not 'host'
-            setIsHost(false);
-          }
-        } else {
-          // User is not a host - check if they're a guest to show appropriate message
-          const { getGuestProfile } = await import('../services/firestoreService');
-          const guestResult = await getGuestProfile(user.uid);
-          if (guestResult.success && guestResult.data) {
-            // User is a guest, not a host
-            setIsHost(false);
-          } else {
-            // User has no profile yet
-            setIsHost(false);
-          }
-        }
-      } catch (err) {
-        console.error('Error checking host status:', err);
-        setError('Failed to verify host status. Please try again.');
-      } finally {
-        setCheckingHost(false);
-      }
-    };
-
-    if (!loading && user) {
-      checkHostStatus();
-    } else if (!loading && !user) {
-      setCheckingHost(false);
-    }
-  }, [user, loading]);
+  // Check if user's active role is 'host'
+  const isHost = activeRole === 'host';
+  const checkingHost = loading || roleLoading;
 
   // Show loading state
   if (loading || checkingHost) {
@@ -70,15 +27,19 @@ const RequireHostAuth = ({ children }) => {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // Not a host - redirect to onboarding (but don't redirect if already on onboarding/register page)
-  // Also check that we're actually on a protected route that requires host status
+  // Check if user is on onboarding/register pages (allow access)
   const isOnboardingOrRegister = location.pathname.startsWith('/host/onboarding') || 
                                   location.pathname.startsWith('/host/register') ||
                                   location.pathname.startsWith('/host/verify-email');
   
-  if (!isHost && !error && !loading && !checkingHost && !isOnboardingOrRegister) {
+  // User doesn't have a host profile - redirect to onboarding (unless on onboarding pages)
+  if (!hasHost && !error && !loading && !checkingHost && !isOnboardingOrRegister) {
     return <Navigate to="/host/onboarding" replace />;
   }
+  
+  // User has host profile - allow access (regardless of active role)
+  // The RoleSwitcher component will allow them to switch roles if needed
+  // This allows hosts to access host routes even if they're currently in guest mode
 
   // Error state
   if (error) {

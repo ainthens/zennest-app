@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { createListing, updateListing, updateHostPoints, createCoupon, updateCoupon } from '../services/firestoreService';
+import { createListing, updateListing, updateHostPoints } from '../services/firestoreService';
 import { uploadImageToCloudinary } from '../config/cloudinary';
 import useAuth from '../hooks/useAuth';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
@@ -34,9 +34,24 @@ import {
   FaDog,
   FaSmokingBan,
   FaPlus,
-  FaTag,
-  FaCopy,
-  FaCheckCircle
+  FaCheckCircle,
+  FaHeart,
+  FaUser,
+  FaUtensils as FaChef,
+  FaCamera,
+  FaMusic,
+  FaImage as FaArt,
+  FaBaby,
+  FaGraduationCap,
+  FaWrench,
+  FaLaptop,
+  FaPlane,
+  FaSpa,
+  FaBriefcase,
+  FaDumbbell as FaFitness,
+  FaCar as FaTransport,
+  FaHome as FaCleaning,
+  FaTv as FaEntertainment
 } from 'react-icons/fa';
 
 // Fix Leaflet default icon issue
@@ -80,6 +95,7 @@ const HostListingForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     category: 'home',
+    serviceCategory: '',
     description: '',
     location: '',
     rate: '',
@@ -100,17 +116,6 @@ const HostListingForm = () => {
   
   // Amenities management
   const [newAmenity, setNewAmenity] = useState('');
-  const [showPromoCodeForm, setShowPromoCodeForm] = useState(false);
-  const [promoCodeData, setPromoCodeData] = useState({
-    code: '',
-    discount: '',
-    discountType: 'percentage',
-    validFrom: '',
-    validUntil: '',
-    maxUses: '',
-    minPurchase: ''
-  });
-  const [generatedPromoCodes, setGeneratedPromoCodes] = useState([]);
   const [mapPosition, setMapPosition] = useState([14.5995, 120.9842]); // Default to Manila
   const [mapZoom, setMapZoom] = useState(13);
   
@@ -127,6 +132,28 @@ const HostListingForm = () => {
     { name: 'Pet Friendly', icon: FaDog },
     { name: 'No Smoking', icon: FaSmokingBan },
     { name: 'Car Rental', icon: FaCar }
+  ];
+
+  // Service categories with icons
+  const serviceCategories = [
+    { value: 'chef', label: 'Chef / Cooking', icon: FaChef },
+    { value: 'photography', label: 'Photography', icon: FaCamera },
+    { value: 'music', label: 'Music / DJ', icon: FaMusic },
+    { value: 'art', label: 'Art / Painting', icon: FaArt },
+    { value: 'beauty', label: 'Beauty / Hair', icon: FaUser },
+    { value: 'childcare', label: 'Childcare', icon: FaBaby },
+    { value: 'tutoring', label: 'Tutoring / Education', icon: FaGraduationCap },
+    { value: 'repair', label: 'Repair / Maintenance', icon: FaWrench },
+    { value: 'technology', label: 'Technology / IT', icon: FaLaptop },
+    { value: 'travel', label: 'Travel / Tour Guide', icon: FaPlane },
+    { value: 'spa', label: 'Spa / Wellness', icon: FaSpa },
+    { value: 'caregiving', label: 'Caregiving', icon: FaHeart },
+    { value: 'business', label: 'Business / Consulting', icon: FaBriefcase },
+    { value: 'fitness', label: 'Fitness / Personal Training', icon: FaFitness },
+    { value: 'transport', label: 'Transportation', icon: FaTransport },
+    { value: 'cleaning', label: 'Cleaning', icon: FaCleaning },
+    { value: 'entertainment', label: 'Entertainment', icon: FaEntertainment },
+    { value: 'other', label: 'Other', icon: FaClock }
   ];
 
   useEffect(() => {
@@ -239,6 +266,7 @@ const HostListingForm = () => {
     const normalizedFormData = {
       title: (formData.title || '').trim(),
       category: formData.category || 'home',
+      serviceCategory: formData.serviceCategory || '',
       description: (formData.description || '').trim(),
       location: (formData.location || '').trim(),
       rate: formData.rate || '',
@@ -255,6 +283,7 @@ const HostListingForm = () => {
     const normalizedOriginal = {
       title: (originalData.title || '').trim(),
       category: originalData.category || 'home',
+      serviceCategory: originalData.serviceCategory || '',
       description: (originalData.description || '').trim(),
       location: (originalData.location || '').trim(),
       rate: originalData.rate || '',
@@ -297,6 +326,7 @@ const HostListingForm = () => {
         const formattedData = {
           title: data.title || '',
           category: data.category || 'home',
+          serviceCategory: data.serviceCategory || '',
           description: data.description || '',
           location: data.location || '',
           rate: data.rate || '',
@@ -448,76 +478,6 @@ const HostListingForm = () => {
     }));
   };
 
-  const generatePromoCode = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
-
-  const handleGeneratePromoCode = () => {
-    const code = generatePromoCode();
-    setPromoCodeData(prev => ({ ...prev, code }));
-  };
-
-  const handleCreatePromoCode = async () => {
-    if (!promoCodeData.code || !promoCodeData.code.trim()) {
-      setError('Please generate or enter a promo code');
-      return;
-    }
-    if (!promoCodeData.discount || parseFloat(promoCodeData.discount) <= 0) {
-      setError('Please enter a valid discount amount');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const couponData = {
-        hostId: user.uid,
-        code: promoCodeData.code.toUpperCase().trim(),
-        discount: parseFloat(promoCodeData.discount),
-        discountType: promoCodeData.discountType,
-        validFrom: promoCodeData.validFrom ? new Date(promoCodeData.validFrom) : new Date(),
-        validUntil: promoCodeData.validUntil ? new Date(promoCodeData.validUntil) : null,
-        maxUses: promoCodeData.maxUses ? parseInt(promoCodeData.maxUses) : null,
-        minPurchase: parseFloat(promoCodeData.minPurchase) || 0,
-        listingId: isEdit ? id : null // Link to listing if editing
-      };
-
-      const result = await createCoupon(couponData);
-      if (result.success) {
-        setGeneratedPromoCodes(prev => [...prev, {
-          ...couponData,
-          id: result.id,
-          createdAt: new Date()
-        }]);
-        setPromoCodeData({
-          code: '',
-          discount: '',
-          discountType: 'percentage',
-          validFrom: '',
-          validUntil: '',
-          maxUses: '',
-          minPurchase: ''
-        });
-        setShowPromoCodeForm(false);
-        setSuccess('Promo code created successfully!');
-      }
-    } catch (error) {
-      console.error('Error creating promo code:', error);
-      setError('Failed to create promo code. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyPromoCode = (code) => {
-    navigator.clipboard.writeText(code);
-    setSuccess(`Promo code "${code}" copied to clipboard!`);
-  };
-
   const handleSubmit = async (e, publish = false) => {
     e.preventDefault();
     setLoading(true);
@@ -560,6 +520,14 @@ const HostListingForm = () => {
         setLoading(false);
         return;
       }
+      // For service category, validate serviceCategory
+      if (formData.category === 'service') {
+        if (!formData.serviceCategory || formData.serviceCategory.trim() === '') {
+          setError('Please select a service type');
+          setLoading(false);
+          return;
+        }
+      }
       // For home category, validate bedrooms, bathrooms, and guests
       if (formData.category === 'home') {
         if (!formData.bedrooms || parseInt(formData.bedrooms) <= 0) {
@@ -598,6 +566,7 @@ const HostListingForm = () => {
       const listingData = {
         title: formData.title.trim(),
         category: formData.category || 'home',
+        serviceCategory: formData.category === 'service' ? (formData.serviceCategory || 'other') : null,
         description: formData.description.trim(),
         location: formData.location.trim(),
         hostId: user.uid,
@@ -653,20 +622,6 @@ const HostListingForm = () => {
         }
       }
 
-      // Link any promo codes created during this session to the listing
-      if (generatedPromoCodes.length > 0 && result.id) {
-        try {
-          const linkPromises = generatedPromoCodes
-            .filter(promo => promo.id && !promo.listingId)
-            .map(promo => updateCoupon(promo.id, { listingId: result.id }));
-          await Promise.all(linkPromises);
-          console.log('✅ Linked promo codes to listing');
-        } catch (linkError) {
-          console.error('Error linking promo codes to listing:', linkError);
-          // Don't fail the listing save if linking fails
-        }
-      }
-
       // Log for debugging
       console.log('Listing saved successfully with status:', listingData.status);
       console.log('Listing ID:', result.id);
@@ -680,6 +635,7 @@ const HostListingForm = () => {
         setOriginalData({
           title: listingData.title,
           category: listingData.category,
+          serviceCategory: formData.serviceCategory || '',
           description: listingData.description,
           location: listingData.location,
           rate: listingData.rate.toString(),
@@ -1091,7 +1047,14 @@ const HostListingForm = () => {
                 <button
                   key={cat.value}
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, category: cat.value }))}
+                  onClick={() => {
+                    setFormData(prev => ({
+                      ...prev,
+                      category: cat.value,
+                      // Reset serviceCategory if switching away from service
+                      serviceCategory: cat.value === 'service' ? prev.serviceCategory : ''
+                    }));
+                  }}
                   className={`
                     p-4 border-2 rounded-lg transition-all
                     ${formData.category === cat.value
@@ -1248,6 +1211,53 @@ const HostListingForm = () => {
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               />
             </div>
+          </div>
+        )}
+
+        {/* Service Category Selection - Only for Services */}
+        {formData.category === 'service' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Service Type *
+              <span className="text-xs text-gray-500 ml-2">(Select the type of service you offer)</span>
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {serviceCategories.map((service) => {
+                const Icon = service.icon;
+                const isSelected = formData.serviceCategory === service.value;
+                return (
+                  <button
+                    key={service.value}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, serviceCategory: service.value }))}
+                    className={`
+                      p-4 border-2 rounded-lg transition-all text-left
+                      ${isSelected
+                        ? 'border-emerald-600 bg-emerald-50'
+                        : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50'
+                      }
+                    `}
+                  >
+                    <div className="flex flex-col items-center text-center">
+                      <Icon className={`text-2xl mb-2 ${
+                        isSelected ? 'text-emerald-600' : 'text-gray-400'
+                      }`} />
+                      <p className={`text-xs font-medium ${
+                        isSelected ? 'text-emerald-700' : 'text-gray-700'
+                      }`}>
+                        {service.label}
+                      </p>
+                      {isSelected && (
+                        <FaCheckCircle className="text-emerald-600 text-sm mt-1" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {!formData.serviceCategory && (
+              <p className="mt-2 text-xs text-red-600">Please select a service type</p>
+            )}
           </div>
         )}
 
@@ -1493,219 +1503,6 @@ const HostListingForm = () => {
                       <FaTimes className="w-3 h-3" />
                     </button>
                   </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Promo Code Generation Section */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-sm font-medium text-gray-700">
-              Promo Codes
-              <span className="text-xs text-gray-500 ml-2">(Create discount codes for guests)</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowPromoCodeForm(!showPromoCodeForm)}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm"
-            >
-              <FaTag />
-              {showPromoCodeForm ? 'Cancel' : 'Create Promo Code'}
-            </button>
-          </div>
-
-          {/* Promo Code Form */}
-          <AnimatePresence>
-            {showPromoCodeForm && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200 space-y-4"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Promo Code *
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={promoCodeData.code}
-                        onChange={(e) => setPromoCodeData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                        placeholder="Enter or generate code"
-                        maxLength={20}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent uppercase"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleGeneratePromoCode}
-                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm whitespace-nowrap"
-                      >
-                        Generate
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Discount Type *
-                    </label>
-                    <select
-                      value={promoCodeData.discountType}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, discountType: e.target.value }))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    >
-                      <option value="percentage">Percentage (%)</option>
-                      <option value="fixed">Fixed Amount (₱)</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Discount {promoCodeData.discountType === 'percentage' ? '(%)' : '(₱)'} *
-                    </label>
-                    <input
-                      type="number"
-                      value={promoCodeData.discount}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, discount: e.target.value }))}
-                      min="0"
-                      max={promoCodeData.discountType === 'percentage' ? '100' : undefined}
-                      step={promoCodeData.discountType === 'percentage' ? '1' : '0.01'}
-                      placeholder="0"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Minimum Purchase (₱)
-                    </label>
-                    <input
-                      type="number"
-                      value={promoCodeData.minPurchase}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, minPurchase: e.target.value }))}
-                      min="0"
-                      step="0.01"
-                      placeholder="0 (no minimum)"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Valid From
-                    </label>
-                    <input
-                      type="date"
-                      value={promoCodeData.validFrom}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, validFrom: e.target.value }))}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Valid Until
-                    </label>
-                    <input
-                      type="date"
-                      value={promoCodeData.validUntil}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, validUntil: e.target.value }))}
-                      min={promoCodeData.validFrom || new Date().toISOString().split('T')[0]}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Max Uses
-                    </label>
-                    <input
-                      type="number"
-                      value={promoCodeData.maxUses}
-                      onChange={(e) => setPromoCodeData(prev => ({ ...prev, maxUses: e.target.value }))}
-                      min="1"
-                      placeholder="Unlimited"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Leave empty for unlimited uses</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleCreatePromoCode}
-                    disabled={loading}
-                    className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {loading ? 'Creating...' : 'Create Promo Code'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowPromoCodeForm(false);
-                      setPromoCodeData({
-                        code: '',
-                        discount: '',
-                        discountType: 'percentage',
-                        validFrom: '',
-                        validUntil: '',
-                        maxUses: '',
-                        minPurchase: ''
-                      });
-                    }}
-                    className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Generated Promo Codes Display */}
-          {generatedPromoCodes.length > 0 && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-xs text-gray-600 mb-3 font-semibold">
-                Created Promo Codes ({generatedPromoCodes.length}):
-              </p>
-              <div className="space-y-2">
-                {generatedPromoCodes.map((promo) => (
-                  <div
-                    key={promo.id || promo.code}
-                    className="flex items-center justify-between p-3 bg-white border border-gray-300 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono font-semibold text-emerald-700">{promo.code}</span>
-                        <span className="text-sm text-gray-600">
-                          - {promo.discount}{promo.discountType === 'percentage' ? '%' : '₱'} off
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {promo.validFrom && (
-                          <span>Valid: {new Date(promo.validFrom).toLocaleDateString()}</span>
-                        )}
-                        {promo.validUntil && (
-                          <span> - {new Date(promo.validUntil).toLocaleDateString()}</span>
-                        )}
-                        {promo.maxUses && <span> · Max {promo.maxUses} uses</span>}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => copyPromoCode(promo.code)}
-                      className="ml-4 p-2 text-gray-400 hover:text-emerald-600 transition-colors"
-                      title="Copy code"
-                    >
-                      <FaCopy className="w-4 h-4" />
-                    </button>
-                  </div>
                 ))}
               </div>
             </div>

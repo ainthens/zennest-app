@@ -6,6 +6,7 @@ import useAuth from '../hooks/useAuth';
 import { getHostProfile } from '../services/firestoreService';
 import ZennestHotingLogo from '../assets/zennest-hosting-logo.svg';
 import Loading from '../components/Loading';
+import RoleSwitcher from '../components/RoleSwitcher';
 import {
   FaHome,
   FaCalendarAlt,
@@ -21,7 +22,9 @@ import {
   FaTimes,
   FaChevronDown,
   FaChevronUp,
-  FaUser
+  FaUser,
+  FaCalendarCheck,
+  FaTicketAlt
 } from 'react-icons/fa';
 
 const HostDashboard = () => {
@@ -43,10 +46,12 @@ const HostDashboard = () => {
   useEffect(() => {
     const path = location.pathname;
     if (path.includes('/listings')) setActiveTab('listings');
+    else if (path.includes('/reservations')) setActiveTab('reservations');
     else if (path.includes('/calendar')) setActiveTab('calendar');
     else if (path.includes('/messages')) setActiveTab('messages');
     else if (path.includes('/payments')) setActiveTab('payments');
     else if (path.includes('/rewards')) setActiveTab('rewards');
+    else if (path.includes('/vouchers')) setActiveTab('vouchers');
     else if (path.includes('/settings')) setActiveTab('settings');
     else setActiveTab('dashboard');
   }, [location.pathname]);
@@ -121,6 +126,7 @@ const HostDashboard = () => {
   const coreMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: FaChartLine, path: '/host/dashboard' },
     { id: 'listings', label: 'Listings', icon: FaList, path: '/host/listings' },
+    { id: 'reservations', label: 'Reservations', icon: FaCalendarCheck, path: '/host/reservations' },
     { id: 'calendar', label: 'Calendar', icon: FaCalendarAlt, path: '/host/calendar' },
     { id: 'messages', label: 'Messages', icon: FaEnvelope, path: '/host/messages' },
   ];
@@ -128,6 +134,7 @@ const HostDashboard = () => {
   const financialMenuItems = [
     { id: 'payments', label: 'Payments', icon: FaWallet, path: '/host/payments' },
     { id: 'rewards', label: 'Points & Rewards', icon: FaGift, path: '/host/rewards' },
+    { id: 'vouchers', label: 'Vouchers', icon: FaTicketAlt, path: '/host/vouchers' },
   ];
 
   const settingsMenuItems = [
@@ -183,7 +190,7 @@ const HostDashboard = () => {
         w-[260px] sm:w-64 bg-white shadow-lg
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        h-screen overflow-hidden flex-shrink-0
+        h-screen overflow-y-auto overflow-x-hidden flex-shrink-0
         max-w-[85vw] lg:max-w-none
       `}>
         <div className="flex flex-col h-full">
@@ -452,6 +459,12 @@ const HostDashboard = () => {
                 </span>
               </div>
             </div>
+            
+            {/* Role Switcher */}
+            <div className="mb-2 sm:mb-3 w-full">
+              <RoleSwitcher variant="sidebar" />
+            </div>
+            
             <button
               onClick={handleLogoutClick}
               className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-all font-semibold text-xs sm:text-sm border-2 border-transparent hover:border-red-200 shadow-sm hover:shadow-md min-h-[44px]"

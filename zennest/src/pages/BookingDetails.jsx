@@ -8,6 +8,7 @@ import { getHostProfile, getOrCreateConversation, updateHostPoints } from '../se
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
 import Loading from '../components/Loading';
+import CancellationReasonModal from '../components/CancellationReasonModal';
 import {
   FaCalendarCheck,
   FaMapMarkerAlt,
@@ -19,7 +20,6 @@ import {
   FaCalendarAlt,
   FaPhone,
   FaEnvelope,
-  FaExclamationTriangle,
   FaBan,
   FaChevronLeft,
   FaUser,
@@ -28,7 +28,15 @@ import {
   FaShieldAlt,
   FaPrint,
   FaDownload,
-  FaStar
+  FaStar,
+  FaShare,
+  FaFacebook,
+  FaInstagram,
+  FaWhatsapp,
+  FaTwitter,
+  FaLink,
+  FaTimes,
+  FaCheck
 } from 'react-icons/fa';
 import { Timestamp } from 'firebase/firestore';
 
@@ -41,9 +49,8 @@ const BookingDetails = () => {
   const [host, setHost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [cancelBookingId, setCancelBookingId] = useState(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [showCancellationReasonModal, setShowCancellationReasonModal] = useState(false);
   const [canReview, setCanReview] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -58,6 +65,8 @@ const BookingDetails = () => {
     value: 5,
     comment: ''
   });
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     if (id && user) {
@@ -168,6 +177,9 @@ const BookingDetails = () => {
 
   const getBookingStatus = (booking) => {
     if (booking.status === 'cancelled') return 'cancelled';
+    if (booking.status === 'pending_approval') return 'pending_approval';
+    if (booking.status === 'pending_cancellation') return 'pending_cancellation';
+    if (booking.status === 'rejected') return 'rejected';
     
     if (!booking.checkIn || !booking.checkOut) {
       if (booking.status === 'confirmed' || booking.status === 'completed') return 'active';
@@ -387,6 +399,24 @@ const BookingDetails = () => {
           color: 'bg-red-100 text-red-700 border-red-300',
           icon: FaTimesCircle 
         };
+      case 'pending_approval':
+        return { 
+          label: 'Awaiting Host Approval', 
+          color: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+          icon: FaClock 
+        };
+      case 'pending_cancellation':
+        return { 
+          label: 'Cancellation Pending', 
+          color: 'bg-orange-100 text-orange-700 border-orange-300',
+          icon: FaClock 
+        };
+      case 'rejected':
+        return { 
+          label: 'Rejected', 
+          color: 'bg-red-100 text-red-700 border-red-300',
+          icon: FaTimesCircle 
+        };
       default:
         return { 
           label: 'Unknown', 
@@ -398,40 +428,59 @@ const BookingDetails = () => {
 
   const canCancelBooking = (booking) => {
     const status = getBookingStatus(booking);
-    return status === 'upcoming' || status === 'active' || 
-           booking.status === 'pending' || booking.status === 'reserved';
+    // Can cancel upcoming, active, confirmed, pending_approval bookings
+    // Cannot cancel already cancelled, past, pending_cancellation, or rejected bookings
+    return (status === 'upcoming' || status === 'active' || 
+           booking.status === 'confirmed' || booking.status === 'pending_approval') &&
+           booking.status !== 'pending_cancellation' &&
+           booking.status !== 'cancelled' &&
+           booking.status !== 'rejected';
   };
 
   const handleCancelClick = () => {
-    setCancelBookingId(booking.id);
-    setShowCancelModal(true);
+    setShowCancellationReasonModal(true);
   };
 
-  const confirmCancelBooking = async () => {
-    if (!cancelBookingId) return;
+  const handleCancellationReasonSubmit = async (cancellationReason) => {
+    if (!booking?.id) return;
 
     try {
       setCancelling(true);
-      const bookingRef = doc(db, 'bookings', cancelBookingId);
+      const bookingRef = doc(db, 'bookings', booking.id);
+      const bookingSnap = await getDoc(bookingRef);
       
+      if (!bookingSnap.exists()) {
+        alert('Booking not found');
+        setShowCancellationReasonModal(false);
+        return;
+      }
+
+      const bookingData = bookingSnap.data();
+      const currentStatus = bookingData.status;
+      
+      // Update booking status to pending_cancellation
       await updateDoc(bookingRef, {
-        status: 'cancelled',
-        cancelledAt: serverTimestamp(),
+        status: 'pending_cancellation',
+        previousStatus: currentStatus, // Store previous status for potential rejection
+        cancellationReason: cancellationReason,
+        cancellationRequestedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ Booking cancelled successfully');
+      console.log('✅ Cancellation request submitted successfully');
+      
+      // Don't send cancellation emails yet - wait for host approval
+      // Emails will be sent after host approves the cancellation
       
       // Refresh booking details
       await fetchBookingDetails();
       
       // Close modal and show success
-      setShowCancelModal(false);
-      setCancelBookingId(null);
-      alert('Booking cancelled successfully!');
+      setShowCancellationReasonModal(false);
+      alert('Cancellation request submitted! Waiting for host approval.');
     } catch (error) {
-      console.error('❌ Error cancelling booking:', error);
-      alert(`Failed to cancel booking: ${error.message || 'Please try again.'}`);
+      console.error('❌ Error submitting cancellation request:', error);
+      alert(`Failed to submit cancellation request: ${error.message || 'Please try again.'}`);
     } finally {
       setCancelling(false);
     }
@@ -468,6 +517,79 @@ const BookingDetails = () => {
     } catch (error) {
       console.error('Error contacting host:', error);
       alert('An error occurred. Please try again.');
+    }
+  };
+
+  const handleShare = () => {
+    setShowShareModal(true);
+    setLinkCopied(false);
+  };
+
+  const shareToFacebook = () => {
+    const url = encodeURIComponent(window.location.href);
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank');
+    setShowShareModal(false);
+  };
+
+  const shareToInstagram = async () => {
+    // Instagram doesn't support direct URL sharing from web
+    // Copy link to clipboard for user to paste in Instagram
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy link:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = window.location.href;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
+    }
+  };
+
+  const shareToWhatsApp = () => {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent(`${listing?.title || 'Check out this booking!'} - ${window.location.href}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+    setShowShareModal(false);
+  };
+
+  const shareToX = () => {
+    const url = encodeURIComponent(window.location.href);
+    const text = encodeURIComponent(listing?.title || 'Check out this booking!');
+    window.open(`https://twitter.com/intent/tweet?url=${url}&text=${text}`, '_blank');
+    setShowShareModal(false);
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy link:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = window.location.href;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setLinkCopied(true);
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
     }
   };
 
@@ -1030,6 +1152,16 @@ const BookingDetails = () => {
                     <FaPrint className="w-4 h-4" />
                     Print Details
                   </button>
+
+                  {listing && (
+                    <button
+                      onClick={handleShare}
+                      className="w-full px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold flex items-center justify-center gap-2"
+                    >
+                      <FaShare className="w-4 h-4" />
+                      Share Booking
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1072,15 +1204,23 @@ const BookingDetails = () => {
         </div>
       </div>
 
-      {/* Cancel Booking Confirmation Modal */}
+      {/* Cancellation Reason Modal */}
+      <CancellationReasonModal
+        isOpen={showCancellationReasonModal}
+        onClose={() => setShowCancellationReasonModal(false)}
+        onSubmit={handleCancellationReasonSubmit}
+        isSubmitting={cancelling}
+      />
+
+      {/* Share Modal */}
       <AnimatePresence>
-        {showCancelModal && (
+        {showShareModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => !cancelling && setShowCancelModal(false)}
+            onClick={() => setShowShareModal(false)}
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -1090,55 +1230,83 @@ const BookingDetails = () => {
               className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                  <FaExclamationTriangle className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Cancel Booking</h3>
-                  <p className="text-sm text-gray-600">Are you sure you want to cancel this booking?</p>
-                </div>
-              </div>
-
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-red-800 font-medium mb-2">⚠️ Important Information:</p>
-                <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
-                  <li>This action cannot be undone</li>
-                  <li>Your booking will be marked as cancelled</li>
-                  <li>Refund policies apply based on cancellation terms</li>
-                  <li>The host will be notified of this cancellation</li>
-                </ul>
-              </div>
-
-              <div className="flex gap-3">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-gray-900">Share Booking</h3>
                 <button
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setCancelBookingId(null);
-                  }}
-                  disabled={cancelling}
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => setShowShareModal(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  Keep Booking
-                </button>
-                <button
-                  onClick={confirmCancelBooking}
-                  disabled={cancelling}
-                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {cancelling ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Cancelling...
-                    </>
-                  ) : (
-                    <>
-                      <FaBan className="w-4 h-4" />
-                      Yes, Cancel Booking
-                    </>
-                  )}
+                  <FaTimes className="w-5 h-5" />
                 </button>
               </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {/* Facebook */}
+                <button
+                  onClick={shareToFacebook}
+                  className="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-500 transition-colors">
+                    <FaFacebook className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-blue-600 text-sm">Facebook</span>
+                </button>
+
+                {/* Instagram */}
+                <button
+                  onClick={shareToInstagram}
+                  className="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-pink-500 hover:bg-pink-50 transition-colors group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center group-hover:bg-pink-500 transition-colors">
+                    <FaInstagram className="w-6 h-6 text-pink-600 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-pink-600 text-sm">Instagram</span>
+                </button>
+
+                {/* WhatsApp */}
+                <button
+                  onClick={shareToWhatsApp}
+                  className="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-green-500 hover:bg-green-50 transition-colors group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-500 transition-colors">
+                    <FaWhatsapp className="w-6 h-6 text-green-600 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-green-600 text-sm">WhatsApp</span>
+                </button>
+
+                {/* X (Twitter) */}
+                <button
+                  onClick={shareToX}
+                  className="flex flex-col items-center gap-3 p-4 rounded-xl border-2 border-gray-200 hover:border-gray-900 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-900 transition-colors">
+                    <FaTwitter className="w-6 h-6 text-gray-700 group-hover:text-white transition-colors" />
+                  </div>
+                  <span className="font-medium text-gray-700 group-hover:text-gray-900 text-sm">X</span>
+                </button>
+              </div>
+
+              {/* Copy Link Button */}
+              <button
+                onClick={copyLink}
+                className={`w-full flex items-center justify-center gap-3 p-4 rounded-xl transition-colors font-semibold ${
+                  linkCopied
+                    ? 'bg-green-100 text-green-700 border-2 border-green-300'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
+              >
+                {linkCopied ? (
+                  <>
+                    <FaCheck className="w-5 h-5" />
+                    <span>Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <FaLink className="w-5 h-5" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
             </motion.div>
           </motion.div>
         )}

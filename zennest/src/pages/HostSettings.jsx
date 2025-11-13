@@ -1,7 +1,7 @@
 // src/pages/HostSettings.jsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { getHostProfile, updateHostProfile, getHostCoupons, createCoupon, getHostBookings, cancelSubscription, deleteHostAccount, getSubscriptionListingLimit, canCreateListing, getHostListings } from '../services/firestoreService';
+import { getHostProfile, updateHostProfile, cancelSubscription, deleteHostAccount, getSubscriptionListingLimit, canCreateListing } from '../services/firestoreService';
 import { uploadImageToCloudinary } from '../config/cloudinary';
 import useAuth from '../hooks/useAuth';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser } from 'firebase/auth';
@@ -9,13 +9,9 @@ import { auth } from '../config/firebase';
 import { useNavigate } from 'react-router-dom';
 import {
   FaUser,
-  FaCalendar,
-  FaTicketAlt,
   FaEdit,
   FaSave,
   FaTimes,
-  FaPlus,
-  FaTrash,
   FaCheckCircle,
   FaImage,
   FaCamera,
@@ -34,12 +30,9 @@ const HostSettings = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [hostProfile, setHostProfile] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [showCouponForm, setShowCouponForm] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
@@ -57,16 +50,6 @@ const HostSettings = () => {
     profilePicture: ''
   });
   const [uploadingPicture, setUploadingPicture] = useState(false);
-
-  const [couponData, setCouponData] = useState({
-    code: '',
-    discount: '',
-    discountType: 'percentage', // 'percentage' or 'fixed'
-    validFrom: '',
-    validUntil: '',
-    maxUses: '',
-    minPurchase: ''
-  });
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -100,17 +83,10 @@ const HostSettings = () => {
 
       console.log('🔍 Fetching host settings data for user:', user.uid);
       
-      // Use Promise.allSettled to handle individual failures
-      const [profileResult, bookingsResult, couponsResult] = await Promise.allSettled([
-        getHostProfile(user.uid),
-        getHostBookings(user.uid),
-        getHostCoupons(user.uid)
-      ]);
-
-      // Handle profile data
-      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
-      if (profile && profile.success && profile.data) {
-        const data = profile.data;
+      // Fetch profile data
+      const profileResult = await getHostProfile(user.uid);
+      if (profileResult && profileResult.success && profileResult.data) {
+        const data = profileResult.data;
         console.log('✅ Fetched profile data:', { 
           hasProfilePicture: !!data.profilePicture,
           firstName: data.firstName,
@@ -128,7 +104,7 @@ const HostSettings = () => {
           profilePicture: data.profilePicture || ''
         });
       } else {
-        const errorMsg = profile?.error || 'Host profile not found';
+        const errorMsg = profileResult?.error || 'Host profile not found';
         console.warn('⚠️ Profile fetch issue:', errorMsg);
         setError(`Failed to load profile: ${errorMsg}`);
         
@@ -144,20 +120,8 @@ const HostSettings = () => {
         });
       }
 
-      // Handle bookings - don't fail if this errors
-      const bookings = bookingsResult.status === 'fulfilled' 
-        ? bookingsResult.value 
-        : { success: false, data: [] };
-      setBookings(bookings.data || []);
-
-      // Handle coupons - don't fail if this errors
-      const coupons = couponsResult.status === 'fulfilled' 
-        ? couponsResult.value 
-        : { success: false, data: [] };
-      setCoupons(coupons.data || []);
-
       // Get listing info for subscription tab
-      if (profile && profile.success && profile.data) {
+      if (profileResult && profileResult.success && profileResult.data) {
         const listingCheck = await canCreateListing(user.uid);
         setListingInfo(listingCheck);
       }
@@ -276,36 +240,6 @@ const HostSettings = () => {
     }
   };
 
-  const handleCouponSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await createCoupon({
-        ...couponData,
-        hostId: user.uid,
-        discount: parseFloat(couponData.discount),
-        maxUses: parseInt(couponData.maxUses) || null,
-        minPurchase: parseFloat(couponData.minPurchase) || 0,
-        validFrom: couponData.validFrom ? new Date(couponData.validFrom) : new Date(),
-        validUntil: couponData.validUntil ? new Date(couponData.validUntil) : null
-      });
-      
-      setCouponData({
-        code: '',
-        discount: '',
-        discountType: 'percentage',
-        validFrom: '',
-        validUntil: '',
-        maxUses: '',
-        minPurchase: ''
-      });
-      setShowCouponForm(false);
-      await fetchData();
-      alert('Coupon created successfully!');
-    } catch (error) {
-      console.error('Error creating coupon:', error);
-      alert('Failed to create coupon. Please try again.');
-    }
-  };
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
@@ -439,8 +373,6 @@ const HostSettings = () => {
   const tabs = [
     { id: 'profile', label: 'Profile', icon: FaUser },
     { id: 'subscription', label: 'Subscription', icon: FaCreditCard },
-    { id: 'bookings', label: 'Bookings', icon: FaCalendar },
-    { id: 'coupons', label: 'Coupons', icon: FaTicketAlt },
     { id: 'security', label: 'Security', icon: FaLock }
   ];
 
@@ -460,7 +392,7 @@ const HostSettings = () => {
       {/* Enhanced Header Section */}
       <div className="space-y-1">
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">Account Settings</h1>
-        <p className="text-sm text-gray-600">Manage your profile, bookings, promotions, and security preferences</p>
+        <p className="text-sm text-gray-600">Manage your profile, subscription, and security preferences</p>
       </div>
 
       {/* Enhanced Tabs Container with Visual Cards */}
@@ -1003,264 +935,6 @@ const HostSettings = () => {
                     <FaUserTimes className="text-base" aria-hidden="true" />
                     <span>Delete Account</span>
                   </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Bookings Tab - Enhanced */}
-          {activeTab === 'bookings' && (
-            <div className="space-y-6">
-              <div className="space-y-1 border-b border-gray-200 pb-3">
-                <h2 className="text-xl font-bold text-gray-900">Booking History</h2>
-                <p className="text-sm text-gray-600">View and manage all bookings from your guests</p>
-              </div>
-              <div className="space-y-4">
-                {bookings.length === 0 ? (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 shadow-sm">
-                    <FaCalendar className="text-5xl mx-auto mb-4 text-gray-300" aria-hidden="true" />
-                    <p className="text-lg font-bold text-gray-900 mb-1">No bookings yet</p>
-                    <p className="text-sm text-gray-600">Your booking history will appear here</p>
-                  </div>
-                ) : (
-                  bookings.map((booking, index) => (
-                    <div
-                      key={booking.id || index}
-                      className="p-5 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow-md"
-                    >
-                      <div className="flex flex-col sm:flex-row justify-between gap-3">
-                        <div className="space-y-1.5 flex-1">
-                          <p className="font-bold text-base text-gray-900">{booking.listingTitle || 'Listing'}</p>
-                          <p className="text-sm text-gray-700">Guest: {booking.guestName || 'Guest'}</p>
-                          <p className="text-xs text-gray-600">
-                            <span className="font-medium">Check-in:</span>{' '}
-                            {booking.checkIn?.toDate
-                              ? booking.checkIn.toDate().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
-                              : new Date(booking.checkIn).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
-                            }
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            <span className="font-medium">Check-out:</span>{' '}
-                            {booking.checkOut?.toDate
-                              ? booking.checkOut.toDate().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
-                              : new Date(booking.checkOut).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })
-                            }
-                          </p>
-                        </div>
-                        <div className="text-left sm:text-right space-y-2 flex-shrink-0">
-                          <p className="font-bold text-xl text-emerald-700">₱{(booking.totalAmount || 0).toLocaleString()}</p>
-                          <span className={`
-                            px-3 py-1.5 rounded-md text-xs font-bold inline-block uppercase tracking-wide
-                            ${booking.status === 'completed'
-                              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
-                              : booking.status === 'confirmed'
-                              ? 'bg-blue-100 text-blue-800 border-2 border-blue-300'
-                              : 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
-                            }
-                          `}>
-                            {booking.status || 'pending'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Coupons Tab - Enhanced */}
-          {activeTab === 'coupons' && (
-            <div className="space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-200 pb-3">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-bold text-gray-900">Discount Coupons</h2>
-                  <p className="text-sm text-gray-600">Create and manage promotional codes</p>
-                </div>
-                {!showCouponForm && (
-                  <button
-                    onClick={() => setShowCouponForm(true)}
-                    aria-label="Create a new coupon"
-                    className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 min-h-[44px]"
-                  >
-                    <FaPlus className="text-base" aria-hidden="true" />
-                    <span>Create Coupon</span>
-                  </button>
-                )}
-              </div>
-
-              {showCouponForm && (
-                <motion.form
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  onSubmit={handleCouponSubmit}
-                  className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-md space-y-4"
-                >
-                  <div className="mb-3">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">New Coupon Details</h3>
-                    <p className="text-sm text-gray-600">Fill in the information below to create a new discount code</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label htmlFor="couponCode" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Coupon Code <span className="text-red-600" aria-label="required">*</span>
-                      </label>
-                      <input
-                        id="couponCode"
-                        type="text"
-                        value={couponData.code}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                        required
-                        aria-required="true"
-                        className="w-full px-4 py-2.5 text-sm font-semibold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono uppercase"
-                        placeholder="SUMMER2024"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="discountType" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Discount Type <span className="text-red-600" aria-label="required">*</span>
-                      </label>
-                      <select
-                        id="discountType"
-                        value={couponData.discountType}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, discountType: e.target.value }))}
-                        required
-                        aria-required="true"
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                      >
-                        <option value="percentage">Percentage (%)</option>
-                        <option value="fixed">Fixed Amount (₱)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="discountValue" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Discount Value <span className="text-red-600" aria-label="required">*</span>
-                      </label>
-                      <input
-                        id="discountValue"
-                        type="number"
-                        value={couponData.discount}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, discount: e.target.value }))}
-                        required
-                        aria-required="true"
-                        min="0"
-                        step="0.01"
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                        placeholder="10"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="minPurchase" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Minimum Purchase (₱)
-                      </label>
-                      <input
-                        id="minPurchase"
-                        type="number"
-                        value={couponData.minPurchase}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, minPurchase: e.target.value }))}
-                        min="0"
-                        step="0.01"
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                        placeholder="1000 (optional)"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="validFrom" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Valid From
-                      </label>
-                      <input
-                        id="validFrom"
-                        type="date"
-                        value={couponData.validFrom}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, validFrom: e.target.value }))}
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label htmlFor="validUntil" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Valid Until
-                      </label>
-                      <input
-                        id="validUntil"
-                        type="date"
-                        value={couponData.validUntil}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, validUntil: e.target.value }))}
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-1.5 md:col-span-2">
-                      <label htmlFor="maxUses" className="block text-xs font-bold text-gray-900 uppercase tracking-wide">
-                        Maximum Uses
-                      </label>
-                      <input
-                        id="maxUses"
-                        type="number"
-                        value={couponData.maxUses}
-                        onChange={(e) => setCouponData(prev => ({ ...prev, maxUses: e.target.value }))}
-                        min="1"
-                        className="w-full px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                        placeholder="Leave empty for unlimited"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-gray-300">
-                    <button
-                      type="submit"
-                      aria-label="Create new coupon"
-                      className="flex-1 bg-emerald-600 text-white font-bold py-3 text-sm rounded-lg hover:bg-emerald-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 min-h-[44px]"
-                    >
-                      Create Coupon
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCouponForm(false)}
-                      aria-label="Cancel coupon creation"
-                      className="flex-1 sm:flex-initial px-6 py-3 bg-gray-300 text-gray-900 font-bold text-sm rounded-lg hover:bg-gray-400 transition-all shadow-sm hover:shadow-md min-h-[44px] transform hover:scale-105 active:scale-95"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </motion.form>
-              )}
-
-              <div className="space-y-4">
-                {coupons.length === 0 ? (
-                  <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 shadow-sm">
-                    <FaTicketAlt className="text-5xl mx-auto mb-4 text-gray-300" aria-hidden="true" />
-                    <p className="text-lg font-bold text-gray-900 mb-1">No coupons created yet</p>
-                    <p className="text-sm text-gray-600">Create your first promotional coupon to attract more guests</p>
-                  </div>
-                ) : (
-                  coupons.map((coupon, index) => (
-                    <div
-                      key={coupon.id || index}
-                      className="p-5 border-2 border-gray-200 rounded-lg hover:bg-gray-50 hover:border-emerald-300 transition-all shadow-sm hover:shadow-md"
-                    >
-                      <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
-                        <div className="space-y-2 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-bold text-base text-gray-900 font-mono">{coupon.code}</p>
-                            {coupon.active && (
-                              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-full border-2 border-emerald-300 uppercase tracking-wide">
-                                Active
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-base font-semibold text-gray-700">
-                            {coupon.discountType === 'percentage'
-                              ? `${coupon.discount}% OFF`
-                              : `₱${coupon.discount} OFF`
-                            }
-                          </p>
-                          <p className="text-xs text-gray-600">
-                            <span className="font-medium">Used:</span> {coupon.usageCount || 0} times
-                            {coupon.maxUses && ` (max: ${coupon.maxUses})`}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
                 )}
               </div>
             </div>

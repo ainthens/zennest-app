@@ -20,21 +20,27 @@ import { db } from '../config/firebase';
 // Host profile management
 export const createHostProfile = async (userId, hostData) => {
   try {
-    // Check if user already has a guest profile - users can't have both
+    // Users can now have both guest and host profiles
+    // Check if guest profile exists and copy relevant data if needed
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
     
+    let guestData = {};
     if (userSnap.exists()) {
-      const existingRole = userSnap.data().role;
-      if (existingRole === 'guest') {
-        console.warn('⚠️ User already has a guest profile. Cannot create host profile.');
-        throw new Error('User is already registered as a guest. Please contact support to convert your account.');
-      }
+      const guestProfile = userSnap.data();
+      // Copy profile picture, name, email if not provided in hostData
+      guestData = {
+        profilePicture: hostData.profilePicture || guestProfile.profilePicture || '',
+        firstName: hostData.firstName || guestProfile.firstName || '',
+        lastName: hostData.lastName || guestProfile.lastName || '',
+        email: hostData.email || guestProfile.email || '',
+      };
     }
 
     const hostRef = doc(db, 'hosts', userId);
     await setDoc(hostRef, {
       ...hostData,
+      ...guestData, // Merge guest profile data
       role: 'host', // Explicitly set role to 'host'
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -43,6 +49,18 @@ export const createHostProfile = async (userId, hostData) => {
       points: 0,
       totalEarnings: 0
     });
+    
+    // Ensure user profile exists (for guest access)
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        role: 'guest',
+        ...guestData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        favorites: []
+      });
+    }
+    
     console.log('✅ Host profile created successfully for user:', userId);
     return { success: true, id: userId };
   } catch (error) {
@@ -140,6 +158,17 @@ export const createListing = async (listingData) => {
     }
     if (!listingData.title || !listingData.title.trim()) {
       throw new Error('Listing title is required');
+    }
+    
+    // Verify user has a host profile (not just guest profile)
+    const hostResult = await getHostProfile(listingData.hostId);
+    if (!hostResult.success || !hostResult.data) {
+      throw new Error('You must have a host account to create listings. Please register as a host first.');
+    }
+    
+    // Verify the role is actually 'host' in the profile
+    if (hostResult.data.role !== 'host') {
+      throw new Error('Invalid host profile. Please contact support.');
     }
     
     // Check if host can create more listings
@@ -428,7 +457,14 @@ export const getHostBookings = async (hostId, status = null) => {
       const querySnapshot = await getDocs(q);
       const bookings = [];
       querySnapshot.forEach((doc) => {
-        bookings.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        // Convert Firestore Timestamps to Date objects for checkIn and checkOut
+        bookings.push({ 
+          id: doc.id, 
+          ...data,
+          checkIn: data.checkIn ? (data.checkIn.toDate ? data.checkIn.toDate() : (data.checkIn instanceof Date ? data.checkIn : new Date(data.checkIn))) : null,
+          checkOut: data.checkOut ? (data.checkOut.toDate ? data.checkOut.toDate() : (data.checkOut instanceof Date ? data.checkOut : new Date(data.checkOut))) : null
+        });
       });
       return { success: true, data: bookings };
     } catch (orderByError) {
@@ -454,10 +490,35 @@ export const getHostBookings = async (hostId, status = null) => {
         const bookings = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          // Helper function to convert dates to Date objects
+          const convertDate = (dateValue) => {
+            if (!dateValue) return null;
+            // Handle Firestore Timestamp
+            if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+              return dateValue.toDate();
+            }
+            // Handle Date objects
+            if (dateValue instanceof Date) {
+              return dateValue;
+            }
+            // Handle date strings (format: "YYYY-MM-DD")
+            if (typeof dateValue === 'string') {
+              // If it's in "YYYY-MM-DD" format, parse it carefully
+              if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                const [year, month, day] = dateValue.split('-').map(Number);
+                return new Date(year, month - 1, day);
+              }
+              // Otherwise, try to parse as ISO string or other format
+              return new Date(dateValue);
+            }
+            return dateValue;
+          };
+          
           bookings.push({ 
             id: doc.id, 
             ...data,
-            checkIn: data.checkIn?.toDate ? data.checkIn.toDate() : data.checkIn
+            checkIn: convertDate(data.checkIn),
+            checkOut: convertDate(data.checkOut)
           });
         });
         
@@ -526,6 +587,172 @@ export const updateBookingStatus = async (bookingId, status, hostId = null) => {
     return { success: true };
   } catch (error) {
     console.error('Error updating booking status:', error);
+    throw error;
+  }
+};
+
+// Approve booking request
+export const approveBooking = async (bookingId, hostId) => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      throw new Error('Booking not found');
+    }
+    
+    const bookingData = bookingSnap.data();
+    
+    // Verify this booking belongs to the host
+    if (bookingData.hostId !== hostId) {
+      throw new Error('Unauthorized: This booking does not belong to you');
+    }
+    
+    // Check if booking is pending approval
+    if (bookingData.status !== 'pending_approval') {
+      throw new Error('Booking is not pending approval');
+    }
+    
+    // Update booking status to confirmed
+    await updateDoc(bookingRef, {
+      status: 'confirmed',
+      approvedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    // Transfer payment to host if payment is completed
+    if (bookingData.paymentStatus === 'completed') {
+      try {
+        const hostAmount = (bookingData.subtotal || 0) - (bookingData.promoDiscount || 0);
+        if (hostAmount > 0) {
+          await transferPaymentToHost(hostId, hostAmount, bookingId, bookingData.listingTitle || 'Listing');
+        }
+      } catch (transferError) {
+        console.error('Error transferring payment to host:', transferError);
+        // Don't fail the approval if transfer fails
+      }
+    }
+    
+    // Return booking data for email sending
+    return { success: true, booking: { id: bookingId, ...bookingData } };
+  } catch (error) {
+    console.error('Error approving booking:', error);
+    throw error;
+  }
+};
+
+// Reject booking request
+export const rejectBooking = async (bookingId, hostId, rejectionReason = null) => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      throw new Error('Booking not found');
+    }
+    
+    const bookingData = bookingSnap.data();
+    
+    // Verify this booking belongs to the host
+    if (bookingData.hostId !== hostId) {
+      throw new Error('Unauthorized: This booking does not belong to you');
+    }
+    
+    // Check if booking is pending approval
+    if (bookingData.status !== 'pending_approval') {
+      throw new Error('Booking is not pending approval');
+    }
+    
+    // Update booking status to rejected
+    await updateDoc(bookingRef, {
+      status: 'rejected',
+      rejectedAt: serverTimestamp(),
+      rejectionReason: rejectionReason || null,
+      updatedAt: serverTimestamp()
+    });
+    
+    // TODO: Handle refund if payment was already processed
+    // For now, we'll leave the payment status as is
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error rejecting booking:', error);
+    throw error;
+  }
+};
+
+// Approve cancellation request
+export const approveCancellation = async (bookingId, hostId) => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      throw new Error('Booking not found');
+    }
+    
+    const bookingData = bookingSnap.data();
+    
+    // Verify this booking belongs to the host
+    if (bookingData.hostId !== hostId) {
+      throw new Error('Unauthorized: This booking does not belong to you');
+    }
+    
+    // Check if cancellation is pending approval
+    if (bookingData.status !== 'pending_cancellation') {
+      throw new Error('Cancellation is not pending approval');
+    }
+    
+    // Update booking status to cancelled
+    await updateDoc(bookingRef, {
+      status: 'cancelled',
+      cancelledAt: serverTimestamp(),
+      cancellationApprovedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    
+    // Return booking data for email sending
+    return { success: true, booking: { id: bookingId, ...bookingData } };
+  } catch (error) {
+    console.error('Error approving cancellation:', error);
+    throw error;
+  }
+};
+
+// Reject cancellation request
+export const rejectCancellation = async (bookingId, hostId, rejectionReason = null) => {
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      throw new Error('Booking not found');
+    }
+    
+    const bookingData = bookingSnap.data();
+    
+    // Verify this booking belongs to the host
+    if (bookingData.hostId !== hostId) {
+      throw new Error('Unauthorized: This booking does not belong to you');
+    }
+    
+    // Check if cancellation is pending approval
+    if (bookingData.status !== 'pending_cancellation') {
+      throw new Error('Cancellation is not pending approval');
+    }
+    
+    // Revert booking status back to confirmed (or previous status)
+    const previousStatus = bookingData.previousStatus || 'confirmed';
+    await updateDoc(bookingRef, {
+      status: previousStatus,
+      cancellationRejectedAt: serverTimestamp(),
+      cancellationRejectionReason: rejectionReason || null,
+      updatedAt: serverTimestamp()
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error rejecting cancellation:', error);
     throw error;
   }
 };
@@ -1145,23 +1372,41 @@ export const getGuestProfile = async (userId) => {
 
 export const createUserProfile = async (userId, userData) => {
   try {
-    // Check if user already has a host profile - users can't have both
+    // Users can now have both guest and host profiles
+    // Check if host profile exists and copy relevant data if needed
     const hostRef = doc(db, 'hosts', userId);
     const hostSnap = await getDoc(hostRef);
     
+    let hostData = {};
     if (hostSnap.exists()) {
-      console.warn('⚠️ User already has a host profile. Cannot create guest profile.');
-      throw new Error('User is already registered as a host. Cannot create guest profile.');
+      const hostProfile = hostSnap.data();
+      // Copy profile picture, name, email if not provided in userData
+      hostData = {
+        profilePicture: userData.profilePicture || hostProfile.profilePicture || '',
+        firstName: userData.firstName || hostProfile.firstName || '',
+        lastName: userData.lastName || hostProfile.lastName || '',
+        email: userData.email || hostProfile.email || '',
+      };
     }
 
     const userRef = doc(db, 'users', userId);
     await setDoc(userRef, {
       ...userData,
+      ...hostData, // Merge host profile data
       role: 'guest', // Explicitly set role to 'guest'
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      favorites: []
+      favorites: userData.favorites || []
     });
+    
+    // Update host profile with guest data if host profile exists
+    if (hostSnap.exists()) {
+      await updateDoc(hostRef, {
+        ...hostData,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
     console.log('✅ Guest profile created successfully');
     return { success: true, id: userId };
   } catch (error) {
@@ -1338,7 +1583,633 @@ export const toggleFavorite = async (userId, listingId) => {
   }
 };
 
-// Points & Rewards
+// Vouchers & Discounts System
+// Generate a unique voucher code
+const generateVoucherCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+// Check if voucher code is unique
+const isVoucherCodeUnique = async (code) => {
+  try {
+    const vouchersRef = collection(db, 'vouchers');
+    const q = query(vouchersRef, where('code', '==', code));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.empty;
+  } catch (error) {
+    console.error('Error checking voucher code uniqueness:', error);
+    return false;
+  }
+};
+
+// Create a new voucher (Host only)
+export const createVoucher = async (hostId, voucherData) => {
+  try {
+    if (!hostId) {
+      throw new Error('Host ID is required');
+    }
+
+    // Validate discount percentage (max 50%)
+    const discountPercentage = parseFloat(voucherData.discountPercentage || 0);
+    if (discountPercentage <= 0 || discountPercentage > 50) {
+      throw new Error('Discount percentage must be between 1% and 50%');
+    }
+
+    // Generate unique voucher code
+    let code;
+    let isUnique = false;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!isUnique && attempts < maxAttempts) {
+      code = generateVoucherCode();
+      isUnique = await isVoucherCodeUnique(code);
+      attempts++;
+    }
+
+    if (!isUnique) {
+      throw new Error('Failed to generate unique voucher code. Please try again.');
+    }
+
+    // Create voucher document
+    const vouchersRef = collection(db, 'vouchers');
+    const voucherDoc = {
+      code,
+      hostId,
+      discountPercentage,
+      isClaimed: false,
+      isUsed: false,
+      claimedBy: null,
+      claimedAt: null,
+      usedAt: null,
+      expirationDate: voucherData.expirationDate ? Timestamp.fromDate(new Date(voucherData.expirationDate)) : null,
+      listingId: voucherData.listingId || null, // Optional: restrict to specific listing
+      usageLimit: voucherData.usageLimit || 1, // Number of times voucher can be used
+      usageCount: 0, // Track how many times it's been used
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    const voucherRef = await addDoc(vouchersRef, voucherDoc);
+    console.log('✅ Voucher created successfully:', code);
+    return { success: true, id: voucherRef.id, code, ...voucherDoc };
+  } catch (error) {
+    console.error('Error creating voucher:', error);
+    throw error;
+  }
+};
+
+// Get all vouchers (filtered by host or guest)
+export const getVouchers = async (userId, userRole = 'guest') => {
+  try {
+    const vouchersRef = collection(db, 'vouchers');
+    let querySnapshot;
+    let vouchers = [];
+
+    if (userRole === 'host') {
+      // Host sees all vouchers they created
+      try {
+        // Try with orderBy first (requires composite index)
+        const q = query(
+          vouchersRef,
+          where('hostId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+        querySnapshot = await getDocs(q);
+      } catch (indexError) {
+        // Check if it's an index error (failed-precondition) or other error
+        if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+          // If index error, fall back to query without orderBy and sort client-side
+          console.warn('⚠️ Composite index not found. Fetching without orderBy and sorting client-side. You can create the index at: https://console.firebase.google.com/v1/r/project/zennest-app/firestore/indexes?create_composite=Ckxwcm9qZWN0cy96ZW5uZXN0LWFwcC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdm91Y2hlcnMvaW5kZXhlcy9fEAEaCgoGaG9zdElkEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg');
+          const q = query(
+            vouchersRef,
+            where('hostId', '==', userId)
+          );
+          querySnapshot = await getDocs(q);
+        } else {
+          // If it's a different error, throw it
+          throw indexError;
+        }
+      }
+
+      vouchers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
+        expirationDate: doc.data().expirationDate?.toDate ? doc.data().expirationDate.toDate() : doc.data().expirationDate,
+        claimedAt: doc.data().claimedAt?.toDate ? doc.data().claimedAt.toDate() : doc.data().claimedAt,
+        usedAt: doc.data().usedAt?.toDate ? doc.data().usedAt.toDate() : doc.data().usedAt
+      }));
+
+      // Sort by createdAt descending (client-side if index was missing)
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      return { success: true, data: vouchers };
+    } else {
+      // Guest sees available vouchers (not claimed) or their claimed vouchers
+      try {
+        // Try with orderBy first
+        const q = query(
+          vouchersRef,
+          orderBy('createdAt', 'desc')
+        );
+        querySnapshot = await getDocs(q);
+      } catch (indexError) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Index not found. Fetching all vouchers and sorting client-side:', indexError);
+        querySnapshot = await getDocs(vouchersRef);
+      }
+
+      vouchers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
+        expirationDate: doc.data().expirationDate?.toDate ? doc.data().expirationDate.toDate() : doc.data().expirationDate,
+        claimedAt: doc.data().claimedAt?.toDate ? doc.data().claimedAt.toDate() : doc.data().claimedAt,
+        usedAt: doc.data().usedAt?.toDate ? doc.data().usedAt.toDate() : doc.data().usedAt
+      }));
+
+      // Sort by createdAt descending (client-side if index was missing)
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      // Filter for guests: show available vouchers or vouchers claimed by this guest
+      const filteredVouchers = vouchers.filter(voucher => 
+        (!voucher.isClaimed && !voucher.isUsed && (voucher.usageCount < (voucher.usageLimit || 1))) ||
+        (voucher.claimedBy === userId)
+      );
+
+      return {
+        success: true,
+        data: filteredVouchers
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching vouchers:', error);
+    // Final fallback: fetch all vouchers and filter/sort client-side
+    try {
+      const vouchersRef = collection(db, 'vouchers');
+      const allVouchers = await getDocs(vouchersRef);
+      const vouchers = allVouchers.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          expirationDate: data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate,
+          claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+          usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+        };
+      });
+
+      // Sort by createdAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      if (userRole === 'host') {
+        // Filter by hostId
+        const hostVouchers = vouchers.filter(voucher => voucher.hostId === userId);
+        return { success: true, data: hostVouchers };
+      } else {
+        // Filter for guests
+        const filteredVouchers = vouchers.filter(voucher => 
+          (!voucher.isClaimed && !voucher.isUsed && (voucher.usageCount < (voucher.usageLimit || 1))) ||
+          (voucher.claimedBy === userId)
+        );
+        return { success: true, data: filteredVouchers };
+      }
+    } catch (fallbackError) {
+      console.error('Error in fallback voucher fetch:', fallbackError);
+      return { success: false, error: fallbackError.message, data: [] };
+    }
+  }
+};
+
+// Get available vouchers for guests (not claimed, not expired, not used)
+export const getAvailableVouchers = async () => {
+  try {
+    const vouchersRef = collection(db, 'vouchers');
+    let querySnapshot;
+    
+    try {
+      // Try with orderBy first (requires composite index)
+      const q = query(
+        vouchersRef,
+        where('isClaimed', '==', false),
+        where('isUsed', '==', false),
+        orderBy('createdAt', 'desc')
+      );
+      querySnapshot = await getDocs(q);
+    } catch (indexError) {
+      // Check if it's an index error (failed-precondition) or other error
+      if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Composite index not found for available vouchers. Fetching without orderBy and sorting client-side.');
+        try {
+          const q = query(
+            vouchersRef,
+            where('isClaimed', '==', false),
+            where('isUsed', '==', false)
+          );
+          querySnapshot = await getDocs(q);
+        } catch (fallbackError) {
+          // If even the fallback fails, get all vouchers
+          console.warn('⚠️ Fallback query failed. Fetching all vouchers and filtering client-side.');
+          querySnapshot = await getDocs(vouchersRef);
+        }
+      } else {
+        // If it's a different error, throw it
+        throw indexError;
+      }
+    }
+
+    const now = new Date();
+    let vouchers = querySnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        const expirationDate = data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate;
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          expirationDate,
+          claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+          usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+        };
+      })
+      .filter(voucher => {
+        // Filter out expired vouchers
+        if (voucher.expirationDate && voucher.expirationDate < now) {
+          return false;
+        }
+        // Filter out vouchers that have reached usage limit
+        if (voucher.usageCount >= (voucher.usageLimit || 1)) {
+          return false;
+        }
+        // Additional client-side filtering if query didn't include all filters
+        if (voucher.isClaimed || voucher.isUsed) {
+          return false;
+        }
+        return true;
+      });
+
+    // Sort by createdAt descending (client-side if index was missing)
+    vouchers.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+      const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return { success: true, data: vouchers };
+  } catch (error) {
+    console.error('Error fetching available vouchers:', error);
+    // Final fallback: get all vouchers and filter/sort client-side
+    try {
+      const vouchersRef = collection(db, 'vouchers');
+      const allVouchers = await getDocs(vouchersRef);
+      const now = new Date();
+      const vouchers = allVouchers.docs
+        .map(doc => {
+          const data = doc.data();
+          const expirationDate = data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate;
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            expirationDate,
+            claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+            usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+          };
+        })
+        .filter(voucher => {
+          if (voucher.isClaimed || voucher.isUsed) return false;
+          if (voucher.expirationDate && voucher.expirationDate < now) return false;
+          if (voucher.usageCount >= (voucher.usageLimit || 1)) return false;
+          return true;
+        });
+
+      // Sort by createdAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      return { success: true, data: vouchers };
+    } catch (fallbackError) {
+      console.error('Error in fallback voucher fetch:', fallbackError);
+      return { success: false, error: fallbackError.message, data: [] };
+    }
+  }
+};
+
+// Get claimed vouchers for a guest
+export const getClaimedVouchers = async (guestId) => {
+  try {
+    const vouchersRef = collection(db, 'vouchers');
+    let querySnapshot;
+    
+    try {
+      // Try with orderBy first (requires composite index)
+      const q = query(
+        vouchersRef,
+        where('claimedBy', '==', guestId),
+        orderBy('claimedAt', 'desc')
+      );
+      querySnapshot = await getDocs(q);
+    } catch (indexError) {
+      // Check if it's an index error (failed-precondition) or other error
+      if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Composite index not found for claimed vouchers. Fetching without orderBy and sorting client-side.');
+        const q = query(
+          vouchersRef,
+          where('claimedBy', '==', guestId)
+        );
+        querySnapshot = await getDocs(q);
+      } else {
+        // If it's a different error, throw it
+        throw indexError;
+      }
+    }
+
+    const now = new Date();
+    const vouchers = querySnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          expirationDate: data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate,
+          claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+          usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+        };
+      })
+      .filter(voucher => {
+        // Filter out expired vouchers
+        if (voucher.expirationDate && voucher.expirationDate < now) {
+          return false;
+        }
+        return true;
+      });
+
+    // Sort by claimedAt descending (client-side if index was missing)
+    vouchers.sort((a, b) => {
+      const dateA = a.claimedAt instanceof Date ? a.claimedAt.getTime() : new Date(a.claimedAt || 0).getTime();
+      const dateB = b.claimedAt instanceof Date ? b.claimedAt.getTime() : new Date(b.claimedAt || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return { success: true, data: vouchers };
+  } catch (error) {
+    console.error('Error fetching claimed vouchers:', error);
+    // Fallback: get all vouchers and filter client-side
+    try {
+      const vouchersRef = collection(db, 'vouchers');
+      const allVouchers = await getDocs(vouchersRef);
+      const now = new Date();
+      const vouchers = allVouchers.docs
+        .map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            expirationDate: data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate,
+            claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+            usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+          };
+        })
+        .filter(voucher => voucher.claimedBy === guestId)
+        .filter(voucher => {
+          // Filter out expired vouchers
+          if (voucher.expirationDate && voucher.expirationDate < now) {
+            return false;
+          }
+          return true;
+        });
+
+      // Sort by claimedAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.claimedAt instanceof Date ? a.claimedAt.getTime() : new Date(a.claimedAt || 0).getTime();
+        const dateB = b.claimedAt instanceof Date ? b.claimedAt.getTime() : new Date(b.claimedAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      return { success: true, data: vouchers };
+    } catch (fallbackError) {
+      console.error('Error in fallback claimed vouchers fetch:', fallbackError);
+      return { success: false, error: fallbackError.message, data: [] };
+    }
+  }
+};
+
+// Claim a voucher (Guest)
+export const claimVoucher = async (voucherId, guestId) => {
+  try {
+    if (!voucherId || !guestId) {
+      throw new Error('Voucher ID and Guest ID are required');
+    }
+
+    const voucherRef = doc(db, 'vouchers', voucherId);
+    const voucherSnap = await getDoc(voucherRef);
+
+    if (!voucherSnap.exists()) {
+      throw new Error('Voucher not found');
+    }
+
+    const voucherData = voucherSnap.data();
+
+    // Check if voucher is already claimed
+    if (voucherData.isClaimed) {
+      throw new Error('Voucher is already claimed');
+    }
+
+    // Check if voucher is already used
+    if (voucherData.isUsed) {
+      throw new Error('Voucher has already been used');
+    }
+
+    // Check if voucher has reached usage limit
+    if (voucherData.usageCount >= (voucherData.usageLimit || 1)) {
+      throw new Error('Voucher has reached its usage limit');
+    }
+
+    // Check expiration
+    if (voucherData.expirationDate) {
+      const expirationDate = voucherData.expirationDate?.toDate ? voucherData.expirationDate.toDate() : new Date(voucherData.expirationDate);
+      if (expirationDate < new Date()) {
+        throw new Error('Voucher has expired');
+      }
+    }
+
+    // Check if guest has already claimed this voucher
+    if (voucherData.claimedBy === guestId) {
+      throw new Error('You have already claimed this voucher');
+    }
+
+    // Claim the voucher
+    await updateDoc(voucherRef, {
+      isClaimed: true,
+      claimedBy: guestId,
+      claimedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    console.log('✅ Voucher claimed successfully:', voucherData.code);
+    return { success: true, voucher: { id: voucherSnap.id, ...voucherData } };
+  } catch (error) {
+    console.error('Error claiming voucher:', error);
+    throw error;
+  }
+};
+
+// Apply a voucher to a booking (validate and calculate discount)
+export const applyVoucher = async (voucherId, guestId, bookingAmount) => {
+  try {
+    if (!voucherId || !guestId) {
+      throw new Error('Voucher ID and Guest ID are required');
+    }
+
+    const voucherRef = doc(db, 'vouchers', voucherId);
+    const voucherSnap = await getDoc(voucherRef);
+
+    if (!voucherSnap.exists()) {
+      throw new Error('Voucher not found');
+    }
+
+    const voucherData = voucherSnap.data();
+
+    // Verify voucher belongs to the guest
+    if (voucherData.claimedBy !== guestId) {
+      throw new Error('Voucher not claimed by this guest');
+    }
+
+    // Check if voucher is already used
+    if (voucherData.isUsed) {
+      throw new Error('Voucher has already been used');
+    }
+
+    // Check if voucher has reached usage limit
+    if (voucherData.usageCount >= (voucherData.usageLimit || 1)) {
+      throw new Error('Voucher has reached its usage limit');
+    }
+
+    // Check expiration
+    if (voucherData.expirationDate) {
+      const expirationDate = voucherData.expirationDate?.toDate ? voucherData.expirationDate.toDate() : new Date(voucherData.expirationDate);
+      if (expirationDate < new Date()) {
+        throw new Error('Voucher has expired');
+      }
+    }
+
+    // Calculate discount
+    const discountPercentage = parseFloat(voucherData.discountPercentage || 0);
+    const discountAmount = (bookingAmount * discountPercentage) / 100;
+    const finalAmount = bookingAmount - discountAmount;
+
+    return {
+      success: true,
+      voucher: { id: voucherSnap.id, ...voucherData },
+      discountPercentage,
+      discountAmount: parseFloat(discountAmount.toFixed(2)),
+      finalAmount: parseFloat(finalAmount.toFixed(2))
+    };
+  } catch (error) {
+    console.error('Error applying voucher:', error);
+    throw error;
+  }
+};
+
+// Mark voucher as used after successful booking
+export const markVoucherUsed = async (voucherId, bookingId) => {
+  try {
+    if (!voucherId) {
+      throw new Error('Voucher ID is required');
+    }
+
+    const voucherRef = doc(db, 'vouchers', voucherId);
+    const voucherSnap = await getDoc(voucherRef);
+
+    if (!voucherSnap.exists()) {
+      throw new Error('Voucher not found');
+    }
+
+    const voucherData = voucherSnap.data();
+    const newUsageCount = (voucherData.usageCount || 0) + 1;
+    const usageLimit = voucherData.usageLimit || 1;
+
+    // Update voucher
+    await updateDoc(voucherRef, {
+      isUsed: newUsageCount >= usageLimit,
+      usageCount: newUsageCount,
+      usedAt: serverTimestamp(),
+      bookingId: bookingId || null,
+      updatedAt: serverTimestamp()
+    });
+
+    console.log('✅ Voucher marked as used:', voucherData.code);
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking voucher as used:', error);
+    throw error;
+  }
+};
+
+// Delete a voucher (Host only)
+export const deleteVoucher = async (voucherId, hostId) => {
+  try {
+    if (!voucherId || !hostId) {
+      throw new Error('Voucher ID and Host ID are required');
+    }
+
+    const voucherRef = doc(db, 'vouchers', voucherId);
+    const voucherSnap = await getDoc(voucherRef);
+
+    if (!voucherSnap.exists()) {
+      throw new Error('Voucher not found');
+    }
+
+    const voucherData = voucherSnap.data();
+
+    // Verify voucher belongs to the host
+    if (voucherData.hostId !== hostId) {
+      throw new Error('Unauthorized: This voucher does not belong to you');
+    }
+
+    // Don't allow deletion if voucher is already used
+    if (voucherData.isUsed) {
+      throw new Error('Cannot delete a voucher that has been used');
+    }
+
+    // Delete voucher
+    await deleteDoc(voucherRef);
+
+    console.log('✅ Voucher deleted successfully:', voucherData.code);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting voucher:', error);
+    throw error;
+  }
+};
+
+// Points & Rewards (Legacy - keeping for backward compatibility)
 export const updateHostPoints = async (userId, points, reason) => {
   try {
     const hostRef = doc(db, 'hosts', userId);
@@ -1702,3 +2573,61 @@ export const deleteHostAccount = async (userId) => {
     throw error;
   }
 };
+
+// Increment listing views
+export const incrementListingViews = async (listingId, userId = null) => {
+  try {
+    const listingRef = doc(db, 'listings', listingId);
+    const listingSnap = await getDoc(listingRef);
+    
+    if (!listingSnap.exists()) {
+      throw new Error('Listing not found');
+    }
+
+    const currentViews = listingSnap.data().views || 0;
+
+    // Update views count
+    await updateDoc(listingRef, {
+      views: currentViews + 1,
+      lastViewedAt: serverTimestamp()
+    });
+
+    // Optionally track view history (for analytics)
+    if (userId) {
+      const viewsRef = collection(db, 'listingViews');
+      await addDoc(viewsRef, {
+        listingId: listingId,
+        userId: userId,
+        viewedAt: serverTimestamp()
+      });
+    }
+
+    return { success: true, views: currentViews + 1 };
+  } catch (error) {
+    console.error('Error incrementing views:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get single listing by ID (for guest viewing)
+export const getListingById = async (listingId) => {
+  try {
+    const listingRef = doc(db, 'listings', listingId);
+    const listingSnap = await getDoc(listingRef);
+    
+    if (!listingSnap.exists()) {
+      return { success: false, error: 'Listing not found' };
+    }
+
+    const listingData = {
+      id: listingSnap.id,
+      ...listingSnap.data()
+    };
+
+    return { success: true, data: listingData };
+  } catch (error) {
+    console.error('Error fetching listing:', error);
+    return { success: false, error: error.message };
+  }
+};
+

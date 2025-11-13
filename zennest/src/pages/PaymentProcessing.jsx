@@ -1,4 +1,14 @@
+<<<<<<< HEAD
 // PaymentProcessing.jsx - Complete working version with PayPal integration
+=======
+// PaymentProcessing.jsx - Multi-step payment flow (fixed PayPal integration)
+//
+// Key fixes:
+// - Removed manual PayPal SDK injection (no double-loading)
+// - Use PayPalScriptProvider only
+// - Always use PHP (Philippine Peso) currency - no fallback to other currencies
+// - Tolerant Client ID resolution (ENV or window global)
+>>>>>>> 811c1c22e610e6ebfc509502754582da151c7e8a
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,9 +17,13 @@ import {
   PayPalButtons,
   usePayPalScriptReducer
 } from '@paypal/react-paypal-js';
+<<<<<<< HEAD
 import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+=======
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+>>>>>>> 811c1c22e610e6ebfc509502754582da151c7e8a
 import { db } from '../config/firebase';
-import { validatePromoCode, updateCoupon, transferPaymentToHost, getHostProfile } from '../services/firestoreService';
+import { transferPaymentToHost, getHostProfile, getClaimedVouchers, applyVoucher, markVoucherUsed } from '../services/firestoreService';
 import { sendBookingConfirmationEmail } from '../services/emailService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
@@ -29,16 +43,17 @@ import {
   FaLock,
   FaTimes,
   FaInfoCircle,
-  FaTag,
-  FaCheck
+  FaCheck,
+  FaTicketAlt,
+  FaPercent,
+  FaTimesCircle
 } from 'react-icons/fa';
 
 /**
  * PayPalButtonsWrapper
  * - Renders PayPalButtons
  * - Watches PayPal script loading state via usePayPalScriptReducer
- * - If script load fails (loadingStatus === 'REJECTED') and current currency is PHP,
- *   automatically switch to USD once via dispatch(resetOptions) (no full page reload).
+ * - Always uses PHP (Philippine Peso) currency - shows error if PHP is not supported
  */
 const PayPalButtonsWrapper = ({
   createOrder,
@@ -56,24 +71,25 @@ const PayPalButtonsWrapper = ({
   useEffect(() => {
     if (isRejected) {
       console.error('❌ PayPal SDK script loading REJECTED for options:', options);
-
-      // If we tried PHP and it failed, attempt USD as a fallback (once)
-      if ((options.currency === 'PHP' || currency === 'PHP') && typeof onCurrencyFallback === 'function') {
-        console.warn('🔄 Attempting fallback to USD due to PHP SDK load failure');
-        onCurrencyFallback('USD');
-
-        // Reset options to use USD and ensure only "buttons" is requested
+      
+      // Always use PHP (Philippine Peso) - show error if PHP is not supported
+      // Don't fallback to USD/EUR as user specifically wants PHP
+      if (options.currency !== 'PHP' && currency !== 'PHP') {
+        console.warn('⚠️ PayPal currency is not PHP. Attempting to use PHP.');
+        // Try to reset to PHP
         dispatch({
           type: 'resetOptions',
           value: {
             ...options,
-            currency: 'USD',
+            currency: 'PHP',
             components: 'buttons'
           }
         });
+      } else {
+        console.error('❌ PayPal SDK failed to load with PHP currency. Please check your PayPal account settings to ensure PHP is supported.');
       }
     }
-  }, [isRejected, options, dispatch, currency, onCurrencyFallback]);
+  }, [isRejected, options, dispatch, currency]);
 
   if (isPending) {
     return (
@@ -86,7 +102,8 @@ const PayPalButtonsWrapper = ({
   if (isRejected) {
     return (
       <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-        Failed to load PayPal. Please try again or use another payment method.
+        <p className="font-semibold mb-2">Failed to load PayPal with PHP (Philippine Peso) currency.</p>
+        <p className="text-xs">Please ensure your PayPal account supports PHP transactions, or try using a different payment method (Wallet).</p>
       </div>
     );
   }
@@ -173,11 +190,13 @@ const PaymentProcessing = () => {
 
   const [messageToHost, setMessageToHost] = useState('');
 
-  const [promoCode, setPromoCode] = useState('');
-  const [appliedPromoCode, setAppliedPromoCode] = useState(null);
-  const [promoCodeError, setPromoCodeError] = useState('');
-  const [validatingPromoCode, setValidatingPromoCode] = useState(false);
-  const [promoDiscount, setPromoDiscount] = useState(0);
+  // Voucher state
+  const [availableVouchers, setAvailableVouchers] = useState([]);
+  const [selectedVoucher, setSelectedVoucher] = useState(null);
+  const [voucherDiscount, setVoucherDiscount] = useState(0);
+  const [voucherError, setVoucherError] = useState('');
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
+  const [applyingVoucher, setApplyingVoucher] = useState(false);
 
   const [totalAmount, setTotalAmount] = useState(0);
   const [serviceFee, setServiceFee] = useState(0);
@@ -189,16 +208,10 @@ const PaymentProcessing = () => {
   const globalClientId = typeof window !== 'undefined' && window.PAYPAL_CLIENT_ID ? window.PAYPAL_CLIENT_ID : null;
   const paypalClientId = (envClientId && envClientId.trim()) || (globalClientId && globalClientId.trim()) || '';
 
-  // Currency preference:
-  // Default to PHP per user request, but allow session override
-  const [paypalCurrency, setPaypalCurrency] = useState(() => {
-    const saved = sessionStorage.getItem('paypalCurrency');
-    if (saved) return saved;
-    return 'PHP'; // default requested by user
-  });
+  // Currency: Always use PHP (Philippine Peso) as requested
+  const PAYPAL_CURRENCY = 'PHP'; // Always use PHP (Philippine Peso)
 
   const [paypalError, setPaypalError] = useState(null);
-  const [currencySwitched, setCurrencySwitched] = useState(false);
   const [forceReinitKey, setForceReinitKey] = useState(0); // bump to force reinit of PayPalButtons
 
   // Validate client id on mount
@@ -214,8 +227,10 @@ const PaymentProcessing = () => {
       console.warn('⚠️ PayPal Client ID seems unusually short:', paypalClientId);
     }
 
-    console.log('✅ PayPal Client ID available. Using currency:', paypalCurrency);
-  }, [paypalClientId, paypalCurrency]);
+    // Clear any previous currency settings to ensure PHP is used
+    sessionStorage.removeItem('paypalCurrency');
+    console.log('✅ PayPal Client ID available. Using currency: PHP (Philippine Peso)');
+  }, [paypalClientId]);
 
   // Fetch initial listing, wallet, calculate totals
   useEffect(() => {
@@ -298,6 +313,11 @@ const PaymentProcessing = () => {
 
       // calculate totals
       calculateTotals(data, listingData);
+
+      // Fetch available vouchers for the guest
+      if (user.uid) {
+        fetchAvailableVouchers(user.uid);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       alert('Failed to load booking information. Please try again.');
@@ -306,7 +326,121 @@ const PaymentProcessing = () => {
     }
   };
 
-  const calculateTotals = (data, listingData = null, promoDiscountAmount = 0) => {
+  // Fetch available vouchers for the guest
+  const fetchAvailableVouchers = async (guestId) => {
+    try {
+      setLoadingVouchers(true);
+      const result = await getClaimedVouchers(guestId);
+      if (result.success) {
+        // Filter out expired and used vouchers
+        const now = new Date();
+        const validVouchers = result.data.filter(voucher => {
+          if (voucher.isUsed) return false;
+          if (voucher.usageCount >= (voucher.usageLimit || 1)) return false;
+          if (voucher.expirationDate) {
+            const expDate = voucher.expirationDate instanceof Date ? voucher.expirationDate : new Date(voucher.expirationDate);
+            if (expDate < now) return false;
+          }
+          return true;
+        });
+        setAvailableVouchers(validVouchers);
+      }
+    } catch (error) {
+      console.error('Error fetching vouchers:', error);
+    } finally {
+      setLoadingVouchers(false);
+    }
+  };
+
+  // Apply voucher to booking
+  const handleApplyVoucher = async (voucherId) => {
+    if (!voucherId || !user?.uid || !listing) {
+      setVoucherError('Unable to apply voucher');
+      return;
+    }
+
+    setApplyingVoucher(true);
+    setVoucherError('');
+
+    try {
+      const currentBookingData = bookingData || (() => {
+        try {
+          const s = sessionStorage.getItem('bookingData');
+          return s ? JSON.parse(s) : null;
+        } catch {
+          return null;
+        }
+      })();
+
+      if (!currentBookingData) {
+        setVoucherError('Booking data not found');
+        setApplyingVoucher(false);
+        return;
+      }
+
+      // Calculate current subtotal for voucher application
+      const baseRate = listing.discount > 0
+        ? (listing.rate || 0) * (1 - listing.discount / 100)
+        : (listing.rate || 0);
+
+      let subtotal = 0;
+      if (listing.category === 'home') {
+        const nights = currentBookingData.nights || 0;
+        subtotal = nights > 0 ? baseRate * nights * (currentBookingData.guests || 1) : baseRate;
+      } else {
+        subtotal = baseRate * (currentBookingData.guests || 1);
+      }
+
+      // Apply voucher
+      const result = await applyVoucher(voucherId, user.uid, subtotal);
+      
+      if (result.success) {
+        setSelectedVoucher(result.voucher);
+        setVoucherError('');
+        calculateTotals(currentBookingData, listing, result.discountAmount);
+      } else {
+        setVoucherError(result.error || 'Failed to apply voucher');
+        setSelectedVoucher(null);
+        calculateTotals(currentBookingData, listing, 0);
+      }
+    } catch (error) {
+      console.error('Error applying voucher:', error);
+      setVoucherError(error.message || 'Failed to apply voucher');
+      setSelectedVoucher(null);
+      const currentBookingData = bookingData || (() => {
+        try {
+          const s = sessionStorage.getItem('bookingData');
+          return s ? JSON.parse(s) : null;
+        } catch {
+          return null;
+        }
+      })();
+      if (currentBookingData) {
+        calculateTotals(currentBookingData, listing, 0);
+      }
+    } finally {
+      setApplyingVoucher(false);
+    }
+  };
+
+  // Remove voucher
+  const handleRemoveVoucher = () => {
+    setSelectedVoucher(null);
+    setVoucherError('');
+    const currentBookingData = bookingData || (() => {
+      try {
+        const s = sessionStorage.getItem('bookingData');
+        return s ? JSON.parse(s) : null;
+      } catch {
+        return null;
+      }
+    })();
+    if (currentBookingData) {
+      calculateTotals(currentBookingData, listing, 0);
+    }
+  };
+
+  const calculateTotals = (data, listingData = null, voucherDiscountAmount = 0) => {
     const listingToUse = listingData || listing;
     if (!listingToUse) return;
 
@@ -322,93 +456,17 @@ const PaymentProcessing = () => {
       subtotal = baseRate * (data.guests || 1);
     }
 
-    const subtotalAfterPromo = Math.max(0, subtotal - promoDiscountAmount);
-    const fee = Math.round(subtotalAfterPromo * 0.05);
-    const total = subtotalAfterPromo + fee;
+    // Apply voucher discount (percentage off)
+    const subtotalAfterVoucher = voucherDiscountAmount > 0 
+      ? Math.max(0, subtotal - voucherDiscountAmount)
+      : subtotal;
+    const fee = Math.round(subtotalAfterVoucher * 0.05);
+    const total = subtotalAfterVoucher + fee;
 
     setTotalAmount(subtotal);
     setServiceFee(fee);
     setFinalTotal(total);
-    setPromoDiscount(promoDiscountAmount);
-  };
-
-  const handleApplyPromoCode = async () => {
-    if (!promoCode.trim()) {
-      setPromoCodeError('Please enter a promo code');
-      return;
-    }
-    if (!listing || !user?.uid) {
-      setPromoCodeError('Unable to validate promo code');
-      return;
-    }
-
-    setValidatingPromoCode(true);
-    setPromoCodeError('');
-
-    try {
-      const currentBookingData = bookingData || (() => {
-        try {
-          const s = sessionStorage.getItem('bookingData');
-          return s ? JSON.parse(s) : null;
-        } catch { return null; }
-      })();
-
-      if (!currentBookingData) {
-        setPromoCodeError('Booking data not found');
-        setValidatingPromoCode(false);
-        return;
-      }
-
-      const baseRate = listing.discount > 0
-        ? (listing.rate || 0) * (1 - listing.discount / 100)
-        : (listing.rate || 0);
-
-      let subtotal = 0;
-      if (listing.category === 'home') {
-        const nights = currentBookingData.nights || 0;
-        subtotal = nights > 0 ? baseRate * nights * (currentBookingData.guests || 1) : baseRate;
-      } else {
-        subtotal = baseRate * (currentBookingData.guests || 1);
-      }
-
-      const result = await validatePromoCode(
-        promoCode.trim(),
-        listing.id,
-        listing.hostId,
-        subtotal
-      );
-
-      if (result.success) {
-        setAppliedPromoCode(result.coupon);
-        setPromoCodeError('');
-        calculateTotals(currentBookingData, listing, result.discountAmount || 0);
-      } else {
-        setPromoCodeError(result.error || 'Invalid promo code');
-        setAppliedPromoCode(null);
-        calculateTotals(currentBookingData, listing, 0);
-      }
-    } catch (error) {
-      console.error('Error validating promo code:', error);
-      setPromoCodeError('Failed to validate promo code. Please try again.');
-      setAppliedPromoCode(null);
-    } finally {
-      setValidatingPromoCode(false);
-    }
-  };
-
-  const handleRemovePromoCode = () => {
-    setPromoCode('');
-    setAppliedPromoCode(null);
-    setPromoCodeError('');
-    const currentBookingData = bookingData || (() => {
-      try {
-        const s = sessionStorage.getItem('bookingData');
-        return s ? JSON.parse(s) : null;
-      } catch { return null; }
-    })();
-    if (currentBookingData && listing) {
-      calculateTotals(currentBookingData, listing, 0);
-    }
+    setVoucherDiscount(voucherDiscountAmount);
   };
 
   const handleNext = async () => {
@@ -424,8 +482,9 @@ const PaymentProcessing = () => {
         return;
       }
 
-      if (appliedPromoCode) {
-        await handleApplyPromoCode();
+      // Apply voucher if selected but not yet applied
+      if (selectedVoucher && !voucherDiscount) {
+        await handleApplyVoucher(selectedVoucher.id);
       }
 
       setCurrentStep(3);
@@ -437,6 +496,28 @@ const PaymentProcessing = () => {
   const handleBack = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
     else navigate(-1);
+  };
+
+  // Helper function to convert date string to Firestore Timestamp
+  const convertToTimestamp = (dateString) => {
+    if (!dateString) return null;
+    // If it's already a Timestamp, return it
+    if (dateString && typeof dateString.toDate === 'function') {
+      return dateString;
+    }
+    // If it's a Date object, convert to Timestamp
+    if (dateString instanceof Date) {
+      return Timestamp.fromDate(dateString);
+    }
+    // If it's a string (format: "YYYY-MM-DD"), parse it and convert to Timestamp
+    if (typeof dateString === 'string') {
+      // Parse the date string (format: "YYYY-MM-DD")
+      // Create a Date object at midnight in local timezone
+      const [year, month, day] = dateString.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return Timestamp.fromDate(date);
+    }
+    return null;
   };
 
   const createBooking = async () => {
@@ -455,19 +536,19 @@ const PaymentProcessing = () => {
       listingId: listing.id,
       listingTitle: listing.title,
       listingCategory: listing.category,
-      status: paymentTiming === 'now' ? 'pending' : 'reserved',
+      status: 'pending_approval', // All bookings start as pending approval
       paymentStatus: paymentTiming === 'now' ? 'pending' : 'scheduled',
       paymentMethod: paymentMethod === 'creditcard' ? 'paypal' : paymentMethod,
       paymentTiming: paymentTiming,
       paypalEmail: (paymentMethod === 'paypal' || paymentMethod === 'creditcard') ? paypalEmail : null,
-      checkIn: finalBookingData.checkIn || null,
-      checkOut: finalBookingData.checkOut || null,
+      checkIn: convertToTimestamp(finalBookingData.checkIn),
+      checkOut: convertToTimestamp(finalBookingData.checkOut),
       guests: finalBookingData.guests || 1,
       nights: finalBookingData.nights || 0,
       subtotal: totalAmount,
-      promoCode: appliedPromoCode?.code || null,
-      promoCodeId: appliedPromoCode?.id || null,
-      promoDiscount: promoDiscount,
+      voucherCode: selectedVoucher?.code || null,
+      voucherId: selectedVoucher?.id || null,
+      voucherDiscount: voucherDiscount,
       serviceFee: serviceFee,
       total: finalTotal,
       messageToHost: messageToHost.trim() || null,
@@ -496,15 +577,28 @@ const PaymentProcessing = () => {
       description: `Booking payment for ${listing.title}`,
       paymentMethod: 'wallet',
       bookingId: bookingId,
+      voucherCode: selectedVoucher?.code || null,
+      voucherDiscount: voucherDiscount || 0,
       createdAt: serverTimestamp()
     });
 
     const bookingRef = doc(db, 'bookings', bookingId);
     await updateDoc(bookingRef, {
       paymentStatus: 'completed',
-      status: 'confirmed',
+      status: 'pending_approval', // Status remains pending_approval until host approves
       updatedAt: serverTimestamp()
     });
+
+    // Mark voucher as used after successful wallet payment
+    if (selectedVoucher && selectedVoucher.id) {
+      try {
+        await markVoucherUsed(selectedVoucher.id, bookingId);
+        console.log('✅ Voucher marked as used:', selectedVoucher.code);
+      } catch (err) {
+        console.error('Error marking voucher as used:', err);
+        // Don't fail the payment if voucher marking fails
+      }
+    }
   };
 
   const handlePayPalSuccess = async (paymentId, paymentDetails = {}) => {
@@ -538,11 +632,11 @@ const PaymentProcessing = () => {
 
       await updateDoc(bookingRef, {
         paymentStatus: 'completed',
-        status: 'confirmed',
+        status: 'pending_approval', // Status remains pending_approval until host approves
         paypalPaymentId: paymentId,
         paypalOrderId: orderId || null,
         paidAmount: paidAmount || finalTotal,
-        paidCurrency: currency || paypalCurrency,
+        paidCurrency: 'PHP', // Always use PHP (Philippine Peso)
         paidAt: serverTimestamp(),
         payerEmail: payer?.email_address || paypalEmail || null,
         payerName: payer?.name?.given_name && payer?.name?.surname
@@ -551,14 +645,14 @@ const PaymentProcessing = () => {
         updatedAt: serverTimestamp()
       });
 
-      if (appliedPromoCode && appliedPromoCode.id) {
+      // Mark voucher as used after successful payment
+      if (selectedVoucher && selectedVoucher.id) {
         try {
-          await updateCoupon(appliedPromoCode.id, {
-            usageCount: (appliedPromoCode.usageCount || 0) + 1,
-            lastUsedAt: serverTimestamp()
-          });
+          await markVoucherUsed(selectedVoucher.id, bookingIdToUse);
+          console.log('✅ Voucher marked as used:', selectedVoucher.code);
         } catch (err) {
-          console.error('Error updating coupon usage', err);
+          console.error('Error marking voucher as used:', err);
+          // Don't fail the payment if voucher marking fails
         }
       }
 
@@ -567,32 +661,28 @@ const PaymentProcessing = () => {
         userId: user.uid,
         type: 'payment',
         amount: paidAmount || finalTotal,
-        currency: currency || paypalCurrency,
+        currency: 'PHP', // Always use PHP (Philippine Peso)
         status: 'completed',
         description: `Booking payment for ${listing.title}`,
         paymentMethod: paymentMethod === 'creditcard' ? 'creditcard' : 'paypal',
         bookingId: bookingIdToUse,
         paypalPaymentId: paymentId,
         paypalOrderId: orderId || null,
-        promoCode: appliedPromoCode?.code || null,
-        promoDiscount: promoDiscount || 0,
+        voucherCode: selectedVoucher?.code || null,
+        voucherDiscount: voucherDiscount || 0,
         createdAt: serverTimestamp(),
         completedAt: serverTimestamp()
       });
 
-      const hostAmount = totalAmount - promoDiscount;
-      try {
-        await transferPaymentToHost(listing.hostId, hostAmount, bookingIdToUse, listing.title);
-      } catch (transferError) {
-        console.error('Error transferring payment to host:', transferError);
-      }
-
-      // non-blocking operations
-      sendBookingConfirmationEmails(bookingIdToUse).catch(e => console.error('Email error', e));
+      // Don't transfer payment until booking is approved
+      // Payment transfer will happen after host approves the booking
+      
+      // non-blocking operations - send message to host only (no confirmation email yet)
       sendMessageToHost(bookingIdToUse).catch(e => console.error('Message error', e));
 
       // Clear sessionStorage
       sessionStorage.removeItem('pendingPaypalBookingId');
+      sessionStorage.removeItem('paypalCurrency'); // Ensure PHP is always used
 
       // Small wait
       await new Promise(res => setTimeout(res, 300));
@@ -600,7 +690,7 @@ const PaymentProcessing = () => {
       navigate('/bookings', {
         state: {
           success: true,
-          message: 'Booking confirmed! Payment processed successfully.',
+          message: 'Booking request submitted! Payment processed successfully. Waiting for host approval.',
           bookingId: bookingIdToUse
         }
       });
@@ -740,22 +830,19 @@ const PaymentProcessing = () => {
 
       if (paymentTiming === 'now' && paymentMethod === 'wallet') {
         await completeWalletPayment(bookingId);
-        const hostAmount = totalAmount - promoDiscount;
-        try {
-          await transferPaymentToHost(listing.hostId, hostAmount, bookingId, listing.title);
-        } catch (err) {
-          console.error('Error transfer to host', err);
-        }
-        await sendBookingConfirmationEmails(bookingId);
+        // Don't transfer payment until booking is approved
+        // Payment transfer will happen after host approves the booking
+        // Don't send confirmation email until host approves
       }
 
-      if (appliedPromoCode && appliedPromoCode.id) {
+      // Mark voucher as used after successful booking
+      if (selectedVoucher && selectedVoucher.id) {
         try {
-          await updateCoupon(appliedPromoCode.id, {
-            usageCount: (appliedPromoCode.usageCount || 0) + 1
-          });
+          await markVoucherUsed(selectedVoucher.id, bookingId);
+          console.log('✅ Voucher marked as used:', selectedVoucher.code);
         } catch (err) {
-          console.error('Error updating promo usage', err);
+          console.error('Error marking voucher as used:', err);
+          // Don't fail the booking if voucher marking fails
         }
       }
 
@@ -764,7 +851,7 @@ const PaymentProcessing = () => {
       navigate('/bookings', {
         state: {
           success: true,
-          message: paymentTiming === 'now' ? 'Booking confirmed! Payment processed successfully.' : 'Booking reserved! Payment will be processed on the scheduled date.'
+          message: paymentTiming === 'now' ? 'Booking request submitted! Payment processed successfully. Waiting for host approval.' : 'Booking request submitted! Payment will be processed on the scheduled date. Waiting for host approval.'
         }
       });
     } catch (err) {
@@ -802,14 +889,14 @@ const PaymentProcessing = () => {
         }
       }
 
-      // Use the same currency as the loaded PayPal SDK (paypalCurrency)
+      // Always use PHP (Philippine Peso) currency
       const value = Number(finalTotal).toFixed(2);
       return await actions.order.create({
         intent: 'CAPTURE',
         purchase_units: [
           {
             amount: {
-              currency_code: paypalCurrency,
+              currency_code: 'PHP', // Always use PHP (Philippine Peso)
               value
             }
           }
@@ -829,9 +916,9 @@ const PaymentProcessing = () => {
       const pu = details?.purchase_units?.[0];
       const cap = pu?.payments?.captures?.[0];
       const amount = cap?.amount?.value || pu?.amount?.value;
-      const currency = cap?.amount?.currency_code || pu?.amount?.currency_code || paypalCurrency;
+      const currency = 'PHP'; // Always use PHP (Philippine Peso) regardless of what PayPal returns
 
-      console.log('✅ PayPal capture details:', { orderId: details?.id, captureId: cap?.id, status: cap?.status, amount, currency });
+      console.log('✅ PayPal capture details:', { orderId: details?.id, captureId: cap?.id, status: cap?.status, amount, currency: 'PHP (Philippine Peso)' });
 
       await handlePayPalSuccess(details?.id, {
         orderId: details?.id,
@@ -862,18 +949,13 @@ const PaymentProcessing = () => {
     }
   };
 
-  // Persist currency fallback so amounts/currency stay consistent with what was paid
+  // Handle currency issues - always use PHP, don't fallback to other currencies
   const handleCurrencyFallback = useCallback((newCurrency) => {
-    try {
-      console.warn('PayPal currency fallback:', paypalCurrency, '->', newCurrency);
-      sessionStorage.setItem('paypalCurrency', newCurrency);
-      setPaypalCurrency(newCurrency);
-      setCurrencySwitched(true);
-      setForceReinitKey((k) => k + 1);
-    } catch (e) {
-      console.error('Currency fallback error:', e);
-    }
-  }, [paypalCurrency]);
+    // Don't allow currency fallback - always use PHP
+    console.warn('⚠️ Currency fallback requested but PHP (Philippine Peso) is required. Keeping PHP.');
+    // Force reinit with PHP
+    setForceReinitKey((k) => k + 1);
+  }, []);
 
   if (loading) {
     return (
@@ -919,7 +1001,16 @@ const PaymentProcessing = () => {
   ];
 
   return (
-    <>
+    <PayPalScriptProvider
+      options={{
+        clientId: paypalClientId,
+        currency: 'PHP', // Always use PHP (Philippine Peso)
+        components: 'buttons',
+        intent: 'capture',
+        locale: 'en_PH' // Set locale to Philippines for better PHP support
+      }}
+      key={`paypal-php-${forceReinitKey}`} // Force reinit if needed
+    >
       <SettingsHeader />
       <div className="min-h-screen bg-slate-50 pt-20 pb-12 relative z-0">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-0">
@@ -1005,39 +1096,54 @@ const PaymentProcessing = () => {
                     <p className="text-sm text-gray-600">Choose how you'd like to pay</p>
                   </div>
 
+                  {/* Voucher Selection */}
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <FaTag className="inline mr-2 text-emerald-600" />
-                      Promo Code
+                      <FaTicketAlt className="inline mr-2 text-emerald-600" />
+                      Voucher (Optional)
                     </label>
-                    {!appliedPromoCode ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={promoCode}
-                          onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoCodeError(''); }}
-                          onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyPromoCode(); } }}
-                          placeholder="Enter promo code"
-                          className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none text-sm uppercase"
-                          disabled={validatingPromoCode}
-                        />
-                        <button onClick={handleApplyPromoCode} disabled={validatingPromoCode || !promoCode.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
-                          {validatingPromoCode ? '...' : 'Apply'}
-                        </button>
+                    {!selectedVoucher ? (
+                      <div className="space-y-2">
+                        {loadingVouchers ? (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-600"></div>
+                          </div>
+                        ) : availableVouchers.length > 0 ? (
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleApplyVoucher(e.target.value);
+                              }
+                            }}
+                            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none text-sm"
+                            disabled={applyingVoucher}
+                            defaultValue=""
+                          >
+                            <option value="">Select a voucher...</option>
+                            {availableVouchers.map((voucher) => (
+                              <option key={voucher.id} value={voucher.id}>
+                                {voucher.code} - {voucher.discountPercentage}% off
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <p className="text-xs text-gray-500 text-center py-2">No vouchers available. <a href="/vouchers" className="text-emerald-600 hover:underline">Claim vouchers</a></p>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-emerald-300">
                         <div className="flex items-center gap-2">
                           <FaCheckCircle className="text-emerald-600" />
-                          <span className="font-mono font-semibold text-emerald-700">{appliedPromoCode.code}</span>
-                          <span className="text-sm text-gray-600">- {appliedPromoCode.discount}{appliedPromoCode.discountType === 'percentage' ? '%' : '₱'} off</span>
+                          <span className="font-mono font-semibold text-emerald-700">{selectedVoucher.code}</span>
+                          <span className="text-sm text-gray-600">- {selectedVoucher.discountPercentage}% off</span>
                         </div>
-                        <button onClick={handleRemovePromoCode} className="text-gray-400 hover:text-red-600 transition-colors" title="Remove promo code">
+                        <button onClick={handleRemoveVoucher} className="text-gray-400 hover:text-red-600 transition-colors" title="Remove voucher" disabled={applyingVoucher}>
                           <FaTimes className="w-4 h-4" />
                         </button>
                       </div>
                     )}
-                    {promoCodeError && (<p className="mt-2 text-xs text-red-600 flex items-center gap-1"><FaTimes className="w-3 h-3" />{promoCodeError}</p>)}
+                    {voucherError && (<p className="mt-2 text-xs text-red-600 flex items-center gap-1"><FaTimes className="w-3 h-3" />{voucherError}</p>)}
+                    {applyingVoucher && (<p className="mt-2 text-xs text-gray-600 flex items-center gap-1">Applying voucher...</p>)}
                   </div>
 
                   <div className="space-y-3">
@@ -1143,7 +1249,7 @@ const PaymentProcessing = () => {
                     <h3 className="font-semibold text-gray-900 mb-3 text-sm">Payment Summary</h3>
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs"><span className="text-gray-600">Subtotal</span><span className="font-medium text-gray-900">₱{totalAmount.toLocaleString()}</span></div>
-                      {appliedPromoCode && promoDiscount > 0 && (<div className="flex justify-between text-xs"><span className="text-gray-600 flex items-center gap-1"><FaTag className="text-emerald-600" /> Promo Code ({appliedPromoCode.code})</span><span className="font-medium text-emerald-600">-₱{promoDiscount.toLocaleString()}</span></div>)}
+                      {selectedVoucher && voucherDiscount > 0 && (<div className="flex justify-between text-xs"><span className="text-gray-600 flex items-center gap-1"><FaTicketAlt className="text-emerald-600" /> Voucher ({selectedVoucher.code})</span><span className="font-medium text-emerald-600">-₱{voucherDiscount.toLocaleString()}</span></div>)}
                       <div className="flex justify-between text-xs"><span className="text-gray-600">Service fee</span><span className="font-medium text-gray-900">₱{serviceFee.toLocaleString()}</span></div>
                       <div className="pt-2 border-t border-gray-300 flex justify-between"><span className="font-bold text-gray-900 text-sm">Total</span><span className="font-bold text-emerald-600 text-base">₱{finalTotal.toLocaleString()}</span></div>
                     </div>
@@ -1160,6 +1266,7 @@ const PaymentProcessing = () => {
 
                   {messageToHost.trim() && (<div className="bg-slate-50 rounded-lg p-4 border border-gray-200"><h3 className="font-semibold text-gray-900 mb-2 text-sm">Message to Host</h3><p className="text-xs text-gray-700 whitespace-pre-wrap">{messageToHost}</p></div>)}
 
+<<<<<<< HEAD
                   {/* PAYPAL BUTTONS SECTION - CRITICAL FIX */}
                   {(paymentMethod === 'paypal' || paymentMethod === 'creditcard') && paymentTiming === 'now' && (
                     <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
@@ -1213,6 +1320,30 @@ const PaymentProcessing = () => {
                           <p className="text-xs text-yellow-700">PayPal sandbox may not support PHP. We've switched to USD automatically for this session.</p>
                         </div>
                       )}
+=======
+                  {/* PayPal Buttons - Show when PayPal/Credit Card is selected and payment timing is "now" */}
+                  {currentStep === 4 && paymentTiming === 'now' && (paymentMethod === 'paypal' || paymentMethod === 'creditcard') && (
+                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                      <h3 className="font-semibold text-gray-900 mb-3 text-sm">Complete Payment</h3>
+                      {paypalError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-xs text-red-700">{paypalError}</p>
+                        </div>
+                      )}
+                      <PayPalButtonsWrapper
+                        createOrder={createPayPalOrder}
+                        onApprove={onApprovePayPalOrder}
+                        onCancel={onCancelPayPalOrder}
+                        onError={(err) => {
+                          console.error('PayPal error:', err);
+                          setPaypalError(err.message || 'Payment failed. Please try again.');
+                        }}
+                        currency="PHP" // Always use PHP (Philippine Peso)
+                        forceReinitKey={forceReinitKey}
+                        onCurrencyFallback={handleCurrencyFallback}
+                        style={{ layout: 'vertical' }}
+                      />
+>>>>>>> 811c1c22e610e6ebfc509502754582da151c7e8a
                     </div>
                   )}
 
@@ -1238,8 +1369,14 @@ const PaymentProcessing = () => {
                   Continue <FaChevronRight className="w-3 h-3" />
                 </button>
               ) : (
+<<<<<<< HEAD
                 // Only show regular booking button if NOT using PayPal/Credit Card with immediate payment
                 !((paymentMethod === 'paypal' || paymentMethod === 'creditcard') && paymentTiming === 'now') && (
+=======
+                // Only show "Complete Booking" button if NOT using PayPal/Credit Card with "Pay Now"
+                // For PayPal/Credit Card with "Pay Now", the PayPal buttons handle the payment
+                !(paymentTiming === 'now' && (paymentMethod === 'paypal' || paymentMethod === 'creditcard')) && (
+>>>>>>> 811c1c22e610e6ebfc509502754582da151c7e8a
                   <button
                     onClick={handleCompleteBooking}
                     disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
@@ -1253,7 +1390,7 @@ const PaymentProcessing = () => {
           </div>
         </div> 
       </div>
-    </>
+    </PayPalScriptProvider>
   );
 };
 

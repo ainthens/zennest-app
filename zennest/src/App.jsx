@@ -35,6 +35,7 @@ import HostCalendar from "./pages/HostCalendar";
 import HostPaymentsReceiving from "./pages/HostPaymentsReceiving";
 import HostSettings from "./pages/HostSettings";
 import HostRewards from "./pages/HostRewards";
+import Reservation from "./pages/Reservation";
 import HostRegistration from "./pages/HostRegistration";
 import HostOnboarding from "./pages/HostOnboarding";
 import HostEmailVerifyPage from "./pages/HostEmailVerifyPage";
@@ -45,6 +46,8 @@ import UserBookings from "./pages/UserBookings";
 import BookingDetails from "./pages/BookingDetails";
 import UserWallet from "./pages/UserWallet";
 import UserPoints from "./pages/UserPoints";
+import GuestVouchers from "./pages/GuestVouchers";
+import HostVouchers from "./pages/HostVouchers";
 import Chat from "./pages/Chat";
 import PaymentProcessing from "./pages/PaymentProcessing";
 import PayPalReturn from "./pages/PayPalReturn";
@@ -311,195 +314,195 @@ const AppContent = () => {
               } 
             />
 
-            {/* Protected Routes */}
-            <Route 
-              path="/dashboard" 
-              element={
-                <RouteErrorBoundary>
-                  <RequireVerified>
-                    <div className="min-h-screen flex items-center justify-center">
-                      <div className="text-center">
-                        <h2 className="text-3xl font-bold text-emerald-700 mb-4">
-                          Welcome to the Dashboard
-                        </h2>
-                        <p className="text-gray-600">
-                          This content is only available for verified users.
-                        </p>
-                      </div>
+          {/* Protected Routes */}
+          <Route 
+            path="/dashboard" 
+            element={
+              <RouteErrorBoundary>
+                <RequireVerified>
+                  <div className="min-h-screen flex items-center justify-center">
+                    <div className="text-center">
+                      <h2 className="text-3xl font-bold text-emerald-700 mb-4">
+                        Welcome to the Dashboard
+                      </h2>
+                      <p className="text-gray-600">
+                        This content is only available for verified users.
+                      </p>
                     </div>
-                  </RequireVerified>
-                </RouteErrorBoundary>
-              } 
-            />
-          
-            {/* Guest/User Routes */}
-            <Route
-              path="/favorites"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserFavorites />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/bookings"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserBookings />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/booking/:id"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <BookingDetails />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/payment"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <PaymentProcessing />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/payment/paypal-return"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <PayPalReturn />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/payment/paypal-cancel"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <PayPalCancel />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/wallet"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserWallet />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/points"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserPoints />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/messages"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserMessages />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/messages/:conversationId"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <Chat />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserSettings />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
-            <Route
-              path="/account"
-              element={
-                <RouteErrorBoundary>
-                  <RequireGuestAuth>
-                    <UserSettings />
-                  </RequireGuestAuth>
-                </RouteErrorBoundary>
-              }
-            />
+                  </div>
+                </RequireVerified>
+              </RouteErrorBoundary>
+            } 
+          />
+        
+          {/* Guest/User Routes */}
+          <Route
+            path="/favorites"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserFavorites />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/bookings"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserBookings />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/booking/:id"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <BookingDetails />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/payment"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <PaymentProcessing />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/payment/paypal-return"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <PayPalReturn />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/payment/paypal-cancel"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <PayPalCancel />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/wallet"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserWallet />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/points"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserPoints />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserMessages />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/messages/:conversationId"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <Chat />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserSettings />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <RouteErrorBoundary>
+                <RequireGuestAuth>
+                  <UserSettings />
+                </RequireGuestAuth>
+              </RouteErrorBoundary>
+            }
+          />
 
-            {/* Host Dashboard Routes */}
-            <Route 
-              path="/host" 
-              element={
-                <RouteErrorBoundary>
-                  <RequireHostAuth>
-                    <HostDashboard />
-                  </RequireHostAuth>
-                </RouteErrorBoundary>
-              }
-            >
-              <Route index element={<Navigate to="/host/dashboard" replace />} />
-              <Route path="dashboard" element={<HostDashboardOverview />} />
-              <Route path="listings" element={<HostListings />} />
-              <Route path="listings/new" element={<HostListingForm />} />
-              <Route path="listings/:id/edit" element={<HostListingForm />} />
-              <Route path="calendar" element={<HostCalendar />} />
-              <Route path="messages" element={<HostMessages />} />
-              <Route path="payments" element={<HostPaymentsReceiving />} />
-              <Route path="rewards" element={<HostRewards />} />
-              <Route path="settings" element={<HostSettings />} />
-            </Route>
-            <Route 
-              path="/host/register" 
-              element={
-                <RouteErrorBoundary>
-                  <HostRegistration />
-                </RouteErrorBoundary>
-              } 
-            />
-            <Route 
-              path="/host/onboarding" 
-              element={
-                <RouteErrorBoundary>
-                  <HostOnboarding />
-                </RouteErrorBoundary>
-              } 
-            />
-            <Route 
-              path="/host/verify-email" 
-              element={
-                <RouteErrorBoundary>
-                  <HostEmailVerifyPage />
-                </RouteErrorBoundary>
-              } 
-            />
+          {/* Host Dashboard Routes */}
+          <Route 
+            path="/host" 
+            element={
+              <RouteErrorBoundary>
+                <RequireHostAuth>
+                  <HostDashboard />
+                </RequireHostAuth>
+              </RouteErrorBoundary>
+            }
+          >
+            <Route index element={<Navigate to="/host/dashboard" replace />} />
+            <Route path="dashboard" element={<HostDashboardOverview />} />
+            <Route path="listings" element={<HostListings />} />
+            <Route path="listings/new" element={<HostListingForm />} />
+            <Route path="listings/:id/edit" element={<HostListingForm />} />
+            <Route path="calendar" element={<HostCalendar />} />
+            <Route path="messages" element={<HostMessages />} />
+            <Route path="payments" element={<HostPaymentsReceiving />} />
+            <Route path="rewards" element={<HostRewards />} />
+            <Route path="settings" element={<HostSettings />} />
+          </Route>
+          <Route 
+            path="/host/register" 
+            element={
+              <RouteErrorBoundary>
+                <HostRegistration />
+              </RouteErrorBoundary>
+            } 
+          />
+          <Route 
+            path="/host/onboarding" 
+            element={
+              <RouteErrorBoundary>
+                <HostOnboarding />
+              </RouteErrorBoundary>
+            } 
+          />
+          <Route 
+            path="/host/verify-email" 
+            element={
+              <RouteErrorBoundary>
+                <HostEmailVerifyPage />
+              </RouteErrorBoundary>
+            } 
+          />
 
             {/* Admin Portal Routes */}
             <Route 

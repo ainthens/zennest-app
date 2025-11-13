@@ -9,7 +9,7 @@
 
 # Environment variables are set in Netlify Dashboard
 # Go to: Site settings → Environment variables
-# Add: VITE_PAYPAL_CLIENT_ID = ARzGT5OD83ycL2CMD_PbN3i0Fhi5hrkokMORjahS7gtpvbTtfyNOHXnfaMCRM-Z059Kg3ZKiSlPuZ_Tz
+# Add: VITE_PAYPAL_CLIENT_ID = Aa1d32EXWKMFsgmQqm_Xri-h9FP6wDDQ4qqg2oLz2jjogpBxgBDLFdyksTZwooCQWVIy6qMXQwvULw-o
 
 # Redirects for Single Page Application (SPA)
 # All routes redirect to index.html for client-side routing
