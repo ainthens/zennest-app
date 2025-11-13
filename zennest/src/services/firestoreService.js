@@ -20,21 +20,27 @@ import { db } from '../config/firebase';
 // Host profile management
 export const createHostProfile = async (userId, hostData) => {
   try {
-    // Check if user already has a guest profile - users can't have both
+    // Users can now have both guest and host profiles
+    // Check if guest profile exists and copy relevant data if needed
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
     
+    let guestData = {};
     if (userSnap.exists()) {
-      const existingRole = userSnap.data().role;
-      if (existingRole === 'guest') {
-        console.warn('⚠️ User already has a guest profile. Cannot create host profile.');
-        throw new Error('User is already registered as a guest. Please contact support to convert your account.');
-      }
+      const guestProfile = userSnap.data();
+      // Copy profile picture, name, email if not provided in hostData
+      guestData = {
+        profilePicture: hostData.profilePicture || guestProfile.profilePicture || '',
+        firstName: hostData.firstName || guestProfile.firstName || '',
+        lastName: hostData.lastName || guestProfile.lastName || '',
+        email: hostData.email || guestProfile.email || '',
+      };
     }
 
     const hostRef = doc(db, 'hosts', userId);
     await setDoc(hostRef, {
       ...hostData,
+      ...guestData, // Merge guest profile data
       role: 'host', // Explicitly set role to 'host'
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -43,6 +49,18 @@ export const createHostProfile = async (userId, hostData) => {
       points: 0,
       totalEarnings: 0
     });
+    
+    // Ensure user profile exists (for guest access)
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        role: 'guest',
+        ...guestData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        favorites: []
+      });
+    }
+    
     console.log('✅ Host profile created successfully for user:', userId);
     return { success: true, id: userId };
   } catch (error) {
@@ -140,6 +158,17 @@ export const createListing = async (listingData) => {
     }
     if (!listingData.title || !listingData.title.trim()) {
       throw new Error('Listing title is required');
+    }
+    
+    // Verify user has a host profile (not just guest profile)
+    const hostResult = await getHostProfile(listingData.hostId);
+    if (!hostResult.success || !hostResult.data) {
+      throw new Error('You must have a host account to create listings. Please register as a host first.');
+    }
+    
+    // Verify the role is actually 'host' in the profile
+    if (hostResult.data.role !== 'host') {
+      throw new Error('Invalid host profile. Please contact support.');
     }
     
     // Check if host can create more listings
@@ -428,7 +457,14 @@ export const getHostBookings = async (hostId, status = null) => {
       const querySnapshot = await getDocs(q);
       const bookings = [];
       querySnapshot.forEach((doc) => {
-        bookings.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        // Convert Firestore Timestamps to Date objects for checkIn and checkOut
+        bookings.push({ 
+          id: doc.id, 
+          ...data,
+          checkIn: data.checkIn ? (data.checkIn.toDate ? data.checkIn.toDate() : (data.checkIn instanceof Date ? data.checkIn : new Date(data.checkIn))) : null,
+          checkOut: data.checkOut ? (data.checkOut.toDate ? data.checkOut.toDate() : (data.checkOut instanceof Date ? data.checkOut : new Date(data.checkOut))) : null
+        });
       });
       return { success: true, data: bookings };
     } catch (orderByError) {
@@ -454,10 +490,35 @@ export const getHostBookings = async (hostId, status = null) => {
         const bookings = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          // Helper function to convert dates to Date objects
+          const convertDate = (dateValue) => {
+            if (!dateValue) return null;
+            // Handle Firestore Timestamp
+            if (dateValue.toDate && typeof dateValue.toDate === 'function') {
+              return dateValue.toDate();
+            }
+            // Handle Date objects
+            if (dateValue instanceof Date) {
+              return dateValue;
+            }
+            // Handle date strings (format: "YYYY-MM-DD")
+            if (typeof dateValue === 'string') {
+              // If it's in "YYYY-MM-DD" format, parse it carefully
+              if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                const [year, month, day] = dateValue.split('-').map(Number);
+                return new Date(year, month - 1, day);
+              }
+              // Otherwise, try to parse as ISO string or other format
+              return new Date(dateValue);
+            }
+            return dateValue;
+          };
+          
           bookings.push({ 
             id: doc.id, 
             ...data,
-            checkIn: data.checkIn?.toDate ? data.checkIn.toDate() : data.checkIn
+            checkIn: convertDate(data.checkIn),
+            checkOut: convertDate(data.checkOut)
           });
         });
         
@@ -1311,23 +1372,41 @@ export const getGuestProfile = async (userId) => {
 
 export const createUserProfile = async (userId, userData) => {
   try {
-    // Check if user already has a host profile - users can't have both
+    // Users can now have both guest and host profiles
+    // Check if host profile exists and copy relevant data if needed
     const hostRef = doc(db, 'hosts', userId);
     const hostSnap = await getDoc(hostRef);
     
+    let hostData = {};
     if (hostSnap.exists()) {
-      console.warn('⚠️ User already has a host profile. Cannot create guest profile.');
-      throw new Error('User is already registered as a host. Cannot create guest profile.');
+      const hostProfile = hostSnap.data();
+      // Copy profile picture, name, email if not provided in userData
+      hostData = {
+        profilePicture: userData.profilePicture || hostProfile.profilePicture || '',
+        firstName: userData.firstName || hostProfile.firstName || '',
+        lastName: userData.lastName || hostProfile.lastName || '',
+        email: userData.email || hostProfile.email || '',
+      };
     }
 
     const userRef = doc(db, 'users', userId);
     await setDoc(userRef, {
       ...userData,
+      ...hostData, // Merge host profile data
       role: 'guest', // Explicitly set role to 'guest'
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      favorites: []
+      favorites: userData.favorites || []
     });
+    
+    // Update host profile with guest data if host profile exists
+    if (hostSnap.exists()) {
+      await updateDoc(hostRef, {
+        ...hostData,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
     console.log('✅ Guest profile created successfully');
     return { success: true, id: userId };
   } catch (error) {
@@ -1589,48 +1668,135 @@ export const createVoucher = async (hostId, voucherData) => {
 export const getVouchers = async (userId, userRole = 'guest') => {
   try {
     const vouchersRef = collection(db, 'vouchers');
-    let q;
+    let querySnapshot;
+    let vouchers = [];
 
     if (userRole === 'host') {
       // Host sees all vouchers they created
-      q = query(
-        vouchersRef,
-        where('hostId', '==', userId),
-        orderBy('createdAt', 'desc')
-      );
+      try {
+        // Try with orderBy first (requires composite index)
+        const q = query(
+          vouchersRef,
+          where('hostId', '==', userId),
+          orderBy('createdAt', 'desc')
+        );
+        querySnapshot = await getDocs(q);
+      } catch (indexError) {
+        // Check if it's an index error (failed-precondition) or other error
+        if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+          // If index error, fall back to query without orderBy and sort client-side
+          console.warn('⚠️ Composite index not found. Fetching without orderBy and sorting client-side. You can create the index at: https://console.firebase.google.com/v1/r/project/zennest-app/firestore/indexes?create_composite=Ckxwcm9qZWN0cy96ZW5uZXN0LWFwcC9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdm91Y2hlcnMvaW5kZXhlcy9fEAEaCgoGaG9zdElkEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg');
+          const q = query(
+            vouchersRef,
+            where('hostId', '==', userId)
+          );
+          querySnapshot = await getDocs(q);
+        } else {
+          // If it's a different error, throw it
+          throw indexError;
+        }
+      }
+
+      vouchers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
+        expirationDate: doc.data().expirationDate?.toDate ? doc.data().expirationDate.toDate() : doc.data().expirationDate,
+        claimedAt: doc.data().claimedAt?.toDate ? doc.data().claimedAt.toDate() : doc.data().claimedAt,
+        usedAt: doc.data().usedAt?.toDate ? doc.data().usedAt.toDate() : doc.data().usedAt
+      }));
+
+      // Sort by createdAt descending (client-side if index was missing)
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      return { success: true, data: vouchers };
     } else {
       // Guest sees available vouchers (not claimed) or their claimed vouchers
-      q = query(
-        vouchersRef,
-        orderBy('createdAt', 'desc')
-      );
-    }
+      try {
+        // Try with orderBy first
+        const q = query(
+          vouchersRef,
+          orderBy('createdAt', 'desc')
+        );
+        querySnapshot = await getDocs(q);
+      } catch (indexError) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Index not found. Fetching all vouchers and sorting client-side:', indexError);
+        querySnapshot = await getDocs(vouchersRef);
+      }
 
-    const querySnapshot = await getDocs(q);
-    const vouchers = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
-      expirationDate: doc.data().expirationDate?.toDate ? doc.data().expirationDate.toDate() : doc.data().expirationDate,
-      claimedAt: doc.data().claimedAt?.toDate ? doc.data().claimedAt.toDate() : doc.data().claimedAt,
-      usedAt: doc.data().usedAt?.toDate ? doc.data().usedAt.toDate() : doc.data().usedAt
-    }));
+      vouchers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : doc.data().createdAt,
+        expirationDate: doc.data().expirationDate?.toDate ? doc.data().expirationDate.toDate() : doc.data().expirationDate,
+        claimedAt: doc.data().claimedAt?.toDate ? doc.data().claimedAt.toDate() : doc.data().claimedAt,
+        usedAt: doc.data().usedAt?.toDate ? doc.data().usedAt.toDate() : doc.data().usedAt
+      }));
 
-    if (userRole === 'guest') {
+      // Sort by createdAt descending (client-side if index was missing)
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
       // Filter for guests: show available vouchers or vouchers claimed by this guest
+      const filteredVouchers = vouchers.filter(voucher => 
+        (!voucher.isClaimed && !voucher.isUsed && (voucher.usageCount < (voucher.usageLimit || 1))) ||
+        (voucher.claimedBy === userId)
+      );
+
       return {
         success: true,
-        data: vouchers.filter(voucher => 
-          (!voucher.isClaimed && !voucher.isUsed && (voucher.usageCount < (voucher.usageLimit || 1))) ||
-          (voucher.claimedBy === userId)
-        )
+        data: filteredVouchers
       };
     }
-
-    return { success: true, data: vouchers };
   } catch (error) {
     console.error('Error fetching vouchers:', error);
-    return { success: false, error: error.message, data: [] };
+    // Final fallback: fetch all vouchers and filter/sort client-side
+    try {
+      const vouchersRef = collection(db, 'vouchers');
+      const allVouchers = await getDocs(vouchersRef);
+      const vouchers = allVouchers.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+          expirationDate: data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate,
+          claimedAt: data.claimedAt?.toDate ? data.claimedAt.toDate() : data.claimedAt,
+          usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
+        };
+      });
+
+      // Sort by createdAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      if (userRole === 'host') {
+        // Filter by hostId
+        const hostVouchers = vouchers.filter(voucher => voucher.hostId === userId);
+        return { success: true, data: hostVouchers };
+      } else {
+        // Filter for guests
+        const filteredVouchers = vouchers.filter(voucher => 
+          (!voucher.isClaimed && !voucher.isUsed && (voucher.usageCount < (voucher.usageLimit || 1))) ||
+          (voucher.claimedBy === userId)
+        );
+        return { success: true, data: filteredVouchers };
+      }
+    } catch (fallbackError) {
+      console.error('Error in fallback voucher fetch:', fallbackError);
+      return { success: false, error: fallbackError.message, data: [] };
+    }
   }
 };
 
@@ -1638,16 +1804,42 @@ export const getVouchers = async (userId, userRole = 'guest') => {
 export const getAvailableVouchers = async () => {
   try {
     const vouchersRef = collection(db, 'vouchers');
-    const q = query(
-      vouchersRef,
-      where('isClaimed', '==', false),
-      where('isUsed', '==', false),
-      orderBy('createdAt', 'desc')
-    );
+    let querySnapshot;
+    
+    try {
+      // Try with orderBy first (requires composite index)
+      const q = query(
+        vouchersRef,
+        where('isClaimed', '==', false),
+        where('isUsed', '==', false),
+        orderBy('createdAt', 'desc')
+      );
+      querySnapshot = await getDocs(q);
+    } catch (indexError) {
+      // Check if it's an index error (failed-precondition) or other error
+      if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Composite index not found for available vouchers. Fetching without orderBy and sorting client-side.');
+        try {
+          const q = query(
+            vouchersRef,
+            where('isClaimed', '==', false),
+            where('isUsed', '==', false)
+          );
+          querySnapshot = await getDocs(q);
+        } catch (fallbackError) {
+          // If even the fallback fails, get all vouchers
+          console.warn('⚠️ Fallback query failed. Fetching all vouchers and filtering client-side.');
+          querySnapshot = await getDocs(vouchersRef);
+        }
+      } else {
+        // If it's a different error, throw it
+        throw indexError;
+      }
+    }
 
-    const querySnapshot = await getDocs(q);
     const now = new Date();
-    const vouchers = querySnapshot.docs
+    let vouchers = querySnapshot.docs
       .map(doc => {
         const data = doc.data();
         const expirationDate = data.expirationDate?.toDate ? data.expirationDate.toDate() : data.expirationDate;
@@ -1669,13 +1861,24 @@ export const getAvailableVouchers = async () => {
         if (voucher.usageCount >= (voucher.usageLimit || 1)) {
           return false;
         }
+        // Additional client-side filtering if query didn't include all filters
+        if (voucher.isClaimed || voucher.isUsed) {
+          return false;
+        }
         return true;
       });
+
+    // Sort by createdAt descending (client-side if index was missing)
+    vouchers.sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+      const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
 
     return { success: true, data: vouchers };
   } catch (error) {
     console.error('Error fetching available vouchers:', error);
-    // If query fails (e.g., missing index), try without filters
+    // Final fallback: get all vouchers and filter/sort client-side
     try {
       const vouchersRef = collection(db, 'vouchers');
       const allVouchers = await getDocs(vouchersRef);
@@ -1700,6 +1903,13 @@ export const getAvailableVouchers = async () => {
           return true;
         });
 
+      // Sort by createdAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt || 0).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt || 0).getTime();
+        return dateB - dateA;
+      });
+
       return { success: true, data: vouchers };
     } catch (fallbackError) {
       console.error('Error in fallback voucher fetch:', fallbackError);
@@ -1712,13 +1922,32 @@ export const getAvailableVouchers = async () => {
 export const getClaimedVouchers = async (guestId) => {
   try {
     const vouchersRef = collection(db, 'vouchers');
-    const q = query(
-      vouchersRef,
-      where('claimedBy', '==', guestId),
-      orderBy('claimedAt', 'desc')
-    );
+    let querySnapshot;
+    
+    try {
+      // Try with orderBy first (requires composite index)
+      const q = query(
+        vouchersRef,
+        where('claimedBy', '==', guestId),
+        orderBy('claimedAt', 'desc')
+      );
+      querySnapshot = await getDocs(q);
+    } catch (indexError) {
+      // Check if it's an index error (failed-precondition) or other error
+      if (indexError.code === 'failed-precondition' || indexError.message?.includes('index')) {
+        // If index error, fall back to query without orderBy and sort client-side
+        console.warn('⚠️ Composite index not found for claimed vouchers. Fetching without orderBy and sorting client-side.');
+        const q = query(
+          vouchersRef,
+          where('claimedBy', '==', guestId)
+        );
+        querySnapshot = await getDocs(q);
+      } else {
+        // If it's a different error, throw it
+        throw indexError;
+      }
+    }
 
-    const querySnapshot = await getDocs(q);
     const now = new Date();
     const vouchers = querySnapshot.docs
       .map(doc => {
@@ -1740,6 +1969,13 @@ export const getClaimedVouchers = async (guestId) => {
         return true;
       });
 
+    // Sort by claimedAt descending (client-side if index was missing)
+    vouchers.sort((a, b) => {
+      const dateA = a.claimedAt instanceof Date ? a.claimedAt.getTime() : new Date(a.claimedAt || 0).getTime();
+      const dateB = b.claimedAt instanceof Date ? b.claimedAt.getTime() : new Date(b.claimedAt || 0).getTime();
+      return dateB - dateA;
+    });
+
     return { success: true, data: vouchers };
   } catch (error) {
     console.error('Error fetching claimed vouchers:', error);
@@ -1760,7 +1996,21 @@ export const getClaimedVouchers = async (guestId) => {
             usedAt: data.usedAt?.toDate ? data.usedAt.toDate() : data.usedAt
           };
         })
-        .filter(voucher => voucher.claimedBy === guestId);
+        .filter(voucher => voucher.claimedBy === guestId)
+        .filter(voucher => {
+          // Filter out expired vouchers
+          if (voucher.expirationDate && voucher.expirationDate < now) {
+            return false;
+          }
+          return true;
+        });
+
+      // Sort by claimedAt descending
+      vouchers.sort((a, b) => {
+        const dateA = a.claimedAt instanceof Date ? a.claimedAt.getTime() : new Date(a.claimedAt || 0).getTime();
+        const dateB = b.claimedAt instanceof Date ? b.claimedAt.getTime() : new Date(b.claimedAt || 0).getTime();
+        return dateB - dateA;
+      });
 
       return { success: true, data: vouchers };
     } catch (fallbackError) {
@@ -2351,11 +2601,131 @@ export const incrementListingViews = async (listingId, userId = null) => {
         viewedAt: serverTimestamp()
       });
     }
-
-    return { success: true, views: currentViews + 1 };
   } catch (error) {
-    console.error('Error incrementing views:', error);
-    return { success: false, error: error.message };
+    console.error('Error incrementing listing views:', error);
+  }
+};
+
+// User Preferences Management (for role switching)
+export const getUserPreferences = async (userId) => {
+  try {
+    if (!userId) {
+      return { success: false, data: null, error: 'User ID is required' };
+    }
+
+    const preferencesRef = doc(db, 'userPreferences', userId);
+    const preferencesSnap = await getDoc(preferencesRef);
+    
+    if (preferencesSnap.exists()) {
+      return { success: true, data: preferencesSnap.data() };
+    } else {
+      // Return default preferences
+      return { 
+        success: true, 
+        data: { 
+          activeRole: null, // Will be determined by available roles
+          updatedAt: null
+        } 
+      };
+    }
+  } catch (error) {
+    console.error('Error getting user preferences:', error);
+    return { 
+      success: false, 
+      data: null, 
+      error: error.message || 'Failed to fetch user preferences' 
+    };
+  }
+};
+
+export const setUserPreferences = async (userId, preferences) => {
+  try {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    const preferencesRef = doc(db, 'userPreferences', userId);
+    await setDoc(preferencesRef, {
+      ...preferences,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting user preferences:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Failed to update user preferences' 
+    };
+  }
+};
+
+export const setActiveRole = async (userId, role) => {
+  try {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    if (role !== 'host' && role !== 'guest') {
+      throw new Error('Invalid role. Must be "host" or "guest"');
+    }
+
+    // Check if user has the requested role
+    if (role === 'host') {
+      const hostResult = await getHostProfile(userId);
+      if (!hostResult.success || !hostResult.data) {
+        throw new Error('User does not have a host profile');
+      }
+    } else {
+      const guestResult = await getGuestProfile(userId);
+      if (!guestResult.success || !guestResult.data) {
+        throw new Error('User does not have a guest profile');
+      }
+    }
+
+    // Update preferences
+    const result = await setUserPreferences(userId, { activeRole: role });
+    
+    // Also store in localStorage for immediate access
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`activeRole_${userId}`, role);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error setting active role:', error);
+    return { 
+      success: false, 
+      error: error.message || 'Failed to set active role' 
+    };
+  }
+};
+
+export const getUserRoles = async (userId) => {
+  try {
+    if (!userId) {
+      return { success: false, hasHost: false, hasGuest: false, error: 'User ID is required' };
+    }
+
+    // Check both roles
+    const hostResult = await getHostProfile(userId);
+    const guestResult = await getGuestProfile(userId);
+    
+    return {
+      success: true,
+      hasHost: hostResult.success && hostResult.data !== null,
+      hasGuest: guestResult.success && guestResult.data !== null,
+      hostProfile: hostResult.data,
+      guestProfile: guestResult.data
+    };
+  } catch (error) {
+    console.error('Error getting user roles:', error);
+    return { 
+      success: false, 
+      hasHost: false, 
+      hasGuest: false, 
+      error: error.message || 'Failed to check user roles' 
+    };
   }
 };
 

@@ -642,6 +642,18 @@ const ListingDetails = () => {
         setCheckIn(date.toISOString().split('T')[0]);
         setCheckOut('');
       } else {
+        // Normalize dates for comparison (ignore time)
+        const startDate = new Date(selectedDates.start);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(date);
+        endDate.setHours(0, 0, 0, 0);
+        
+        // Check if check-in and check-out are the same date (same day)
+        if (startDate.getTime() === endDate.getTime()) {
+          alert('Check-out date must be at least 1 day after check-in date. Please select a different check-out date.');
+          return;
+        }
+        
         // Check if any unavailable dates are in the range
         if (hasUnavailableDatesInRange(selectedDates.start, date)) {
           alert('Selected range contains unavailable dates. Please select a different range.');
@@ -1532,8 +1544,25 @@ const ListingDetails = () => {
                         return;
                       }
                       
-                      // Validate that selected dates don't include unavailable dates
+                      // Validate that check-in and check-out are not the same date
                       if (listing.category === 'home' && checkIn && checkOut) {
+                        const checkInDate = new Date(checkIn);
+                        const checkOutDate = new Date(checkOut);
+                        checkInDate.setHours(0, 0, 0, 0);
+                        checkOutDate.setHours(0, 0, 0, 0);
+                        
+                        if (checkInDate.getTime() === checkOutDate.getTime()) {
+                          alert('Check-out date must be at least 1 day after check-in date. Please select different dates.');
+                          return;
+                        }
+                        
+                        // Check if check-out is before or equal to check-in
+                        if (checkOutDate <= checkInDate) {
+                          alert('Check-out date must be after check-in date. Please select different dates.');
+                          return;
+                        }
+                        
+                        // Validate that selected dates don't include unavailable dates
                         if (hasUnavailableDatesInRange(checkIn, checkOut)) {
                           alert('Your selected dates include unavailable dates. Please select different dates.');
                           return;
@@ -2406,8 +2435,25 @@ const ListingDetails = () => {
                         return;
                       }
                       
-                      // Validate that selected dates don't include unavailable dates
+                      // Validate that check-in and check-out are not the same date
                       if (listing.category === 'home' && checkIn && checkOut) {
+                        const checkInDate = new Date(checkIn);
+                        const checkOutDate = new Date(checkOut);
+                        checkInDate.setHours(0, 0, 0, 0);
+                        checkOutDate.setHours(0, 0, 0, 0);
+                        
+                        if (checkInDate.getTime() === checkOutDate.getTime()) {
+                          alert('Check-out date must be at least 1 day after check-in date. Please select different dates.');
+                          return;
+                        }
+                        
+                        // Check if check-out is before or equal to check-in
+                        if (checkOutDate <= checkInDate) {
+                          alert('Check-out date must be after check-in date. Please select different dates.');
+                          return;
+                        }
+                        
+                        // Validate that selected dates don't include unavailable dates
                         if (hasUnavailableDatesInRange(checkIn, checkOut)) {
                           alert('Your selected dates include unavailable dates. Please select different dates.');
                           return;

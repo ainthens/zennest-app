@@ -65,26 +65,104 @@ const HostDashboardOverview = () => {
       const bookingsResult = await getHostBookings(user.uid);
       const bookings = bookingsResult.data || [];
       
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // Helper function to normalize dates to start of day (local time)
+      const normalizeDate = (date) => {
+        if (!date) return null;
+        
+        // Handle Firestore Timestamp
+        if (date && typeof date.toDate === 'function') {
+          date = date.toDate();
+        }
+        // Handle date strings (format: "YYYY-MM-DD" or ISO string)
+        else if (typeof date === 'string') {
+          // If it's in "YYYY-MM-DD" format, parse it carefully to avoid timezone issues
+          if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            const [year, month, day] = date.split('-').map(Number);
+            // Create Date at midnight in local timezone (month is 0-indexed)
+            date = new Date(year, month - 1, day);
+          } else {
+            // Otherwise, try to parse as ISO string or other format
+            date = new Date(date);
+          }
+        }
+        // Handle Date objects
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+          return null;
+        }
+        // Create a new Date object normalized to local midnight
+        // Use UTC methods to get the date components, then create a local Date
+        // This ensures we're comparing the calendar date, not the time
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const day = date.getDate();
+        const normalized = new Date(year, month, day, 0, 0, 0, 0);
+        return normalized;
+      };
       
-      const todayBookingsList = bookings.filter(booking => {
-        if (!booking.checkIn) return false;
-        const checkInDate = booking.checkIn.toDate ? booking.checkIn.toDate() : new Date(booking.checkIn);
-        checkInDate.setHours(0, 0, 0, 0);
-        return checkInDate.getTime() === today.getTime() && booking.status === 'confirmed';
+      // Get today's date normalized to midnight (local time)
+      const today = normalizeDate(new Date());
+      
+      // Debug: Log bookings and dates
+      console.log('📅 Today:', today);
+      console.log('📅 All bookings:', bookings.length);
+      bookings.forEach((booking, idx) => {
+        console.log(`Booking ${idx + 1}:`, {
+          id: booking.id,
+          checkIn: booking.checkIn,
+          checkInType: typeof booking.checkIn,
+          status: booking.status,
+          normalized: normalizeDate(booking.checkIn)
+        });
       });
+      
+      // Filter bookings for today - include confirmed and completed bookings
+      const todayBookingsList = bookings.filter(booking => {
+        if (!booking.checkIn) {
+          console.log('❌ Booking has no checkIn:', booking.id);
+          return false;
+        }
+        // Only include confirmed or completed bookings
+        if (booking.status !== 'confirmed' && booking.status !== 'completed') {
+          console.log('❌ Booking status not confirmed/completed:', booking.id, booking.status);
+          return false;
+        }
+        
+        const checkInDate = normalizeDate(booking.checkIn);
+        if (!checkInDate || !today) {
+          console.log('❌ Could not normalize date:', booking.id, { checkInDate, today });
+          return false;
+        }
+        
+        const isToday = checkInDate.getTime() === today.getTime();
+        if (isToday) {
+          console.log('✅ Booking is today:', booking.id, { checkInDate, today });
+        }
+        // Compare dates (both normalized to midnight)
+        return isToday;
+      });
+      
+      console.log('📅 Today bookings:', todayBookingsList.length);
 
+      // Filter upcoming bookings - include confirmed and completed bookings
       const upcomingBookingsList = bookings
         .filter(booking => {
           if (!booking.checkIn) return false;
-          const checkInDate = booking.checkIn.toDate ? booking.checkIn.toDate() : new Date(booking.checkIn);
-          return checkInDate > today && booking.status === 'confirmed';
+          // Only include confirmed or completed bookings
+          if (booking.status !== 'confirmed' && booking.status !== 'completed') {
+            return false;
+          }
+          
+          const checkInDate = normalizeDate(booking.checkIn);
+          if (!checkInDate || !today) return false;
+          
+          // Check if checkIn is after today
+          return checkInDate.getTime() > today.getTime();
         })
         .sort((a, b) => {
-          const dateA = a.checkIn.toDate ? a.checkIn.toDate() : new Date(a.checkIn);
-          const dateB = b.checkIn.toDate ? b.checkIn.toDate() : new Date(b.checkIn);
-          return dateA - dateB;
+          const dateA = normalizeDate(a.checkIn);
+          const dateB = normalizeDate(b.checkIn);
+          if (!dateA || !dateB) return 0;
+          return dateA.getTime() - dateB.getTime(); // Ascending order (earliest first)
         })
         .slice(0, 5);
 
@@ -363,7 +441,13 @@ const HostDashboardOverview = () => {
                   <div className="text-right">
                     <p className="font-semibold text-sm text-emerald-700">₱{(booking.total || booking.totalAmount || 0).toLocaleString()}</p>
                     <p className="text-[10px] text-gray-500">
-                      {booking.checkIn?.toDate ? booking.checkIn.toDate().toLocaleDateString() : 'Today'}
+                      {booking.checkIn ? (
+                        booking.checkIn instanceof Date 
+                          ? booking.checkIn.toLocaleDateString() 
+                          : booking.checkIn.toDate 
+                          ? booking.checkIn.toDate().toLocaleDateString()
+                          : new Date(booking.checkIn).toLocaleDateString()
+                      ) : 'Today'}
                     </p>
                   </div>
                 </motion.div>
@@ -418,9 +502,21 @@ const HostDashboardOverview = () => {
                     <p className="font-semibold text-sm text-gray-900">{booking.guestName || 'Guest'}</p>
                     <p className="text-xs text-gray-600">{booking.listingTitle || 'Listing'}</p>
                     <p className="text-[10px] text-gray-500 mt-0.5">
-                      {booking.checkIn?.toDate ? booking.checkIn.toDate().toLocaleDateString() : ''}
-                      {' - '}
-                      {booking.checkOut?.toDate ? booking.checkOut.toDate().toLocaleDateString() : ''}
+                      {booking.checkIn ? (
+                        booking.checkIn instanceof Date 
+                          ? booking.checkIn.toLocaleDateString() 
+                          : booking.checkIn.toDate 
+                          ? booking.checkIn.toDate().toLocaleDateString()
+                          : new Date(booking.checkIn).toLocaleDateString()
+                      ) : ''}
+                      {booking.checkIn && booking.checkOut ? ' - ' : ''}
+                      {booking.checkOut ? (
+                        booking.checkOut instanceof Date 
+                          ? booking.checkOut.toLocaleDateString() 
+                          : booking.checkOut.toDate 
+                          ? booking.checkOut.toDate().toLocaleDateString()
+                          : new Date(booking.checkOut).toLocaleDateString()
+                      ) : ''}
                     </p>
                   </div>
                   <div className="text-right">

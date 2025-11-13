@@ -18,7 +18,6 @@ import {
   FaWallet,
   FaCalendarCheck,
   FaStar,
-  FaUser,
   FaArrowLeft,
   FaChevronLeft,
   FaTicketAlt,
@@ -27,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getGuestProfile, getHostProfile } from "../services/firestoreService";
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "../config/firebase";
+import RoleSwitcher from "./RoleSwitcher";
 
 const SettingsHeader = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,7 +38,7 @@ const SettingsHeader = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { role, isHost, isGuest } = useUserRole();
+  const { role, isHost, isGuest, canSwitchRoles, hasHost } = useUserRole();
   const menuRef = useRef(null);
   const mobileMenuRef = useRef(null);
   const mobileProfileRef = useRef(null);
@@ -342,24 +342,37 @@ const SettingsHeader = () => {
 
                         {/* Mobile Menu Items */}
                         <div className="py-1">
-                          {isHost ? (
+                          {isHost || hasHost ? (
                             <>
-                              <MobileMenuItem
-                                icon={FaHome}
-                                label="Dashboard"
-                                onClick={() => handleNavigation("/host/dashboard")}
-                                index={0}
-                                highlighted={mobileHighlightedIndex === 0}
-                                onHover={() => setMobileHighlightedIndex(0)}
-                              />
-                              <MobileMenuItem
-                                icon={FaCog}
-                                label="Settings"
-                                onClick={() => handleNavigation("/host/settings")}
-                                index={1}
-                                highlighted={mobileHighlightedIndex === 1}
-                                onHover={() => setMobileHighlightedIndex(1)}
-                              />
+                              {hasHost && (
+                                <MobileMenuItem
+                                  icon={FaHome}
+                                  label="Dashboard"
+                                  onClick={() => handleNavigation("/host/dashboard")}
+                                  index={0}
+                                  highlighted={mobileHighlightedIndex === 0}
+                                  onHover={() => setMobileHighlightedIndex(0)}
+                                />
+                              )}
+                              {hasHost && (
+                                <MobileMenuItem
+                                  icon={FaCog}
+                                  label="Settings"
+                                  onClick={() => handleNavigation("/host/settings")}
+                                  index={1}
+                                  highlighted={mobileHighlightedIndex === 1}
+                                  onHover={() => setMobileHighlightedIndex(1)}
+                                />
+                              )}
+                              {/* Role Switcher for Mobile */}
+                              {canSwitchRoles && (
+                                <>
+                                  <div className="h-px bg-gray-200 my-1"></div>
+                                  <div className="px-2 py-2">
+                                    <RoleSwitcher />
+                                  </div>
+                                </>
+                              )}
                               <div className="h-px bg-gray-200 my-1"></div>
                               <MobileMenuItem
                                 icon={FaSignOutAlt}
@@ -406,37 +419,29 @@ const SettingsHeader = () => {
                                 onHover={() => setMobileHighlightedIndex(3)}
                               />
                               <MobileMenuItem
-                                icon={FaUser}
-                                label="Profile"
-                                onClick={() => handleNavigation("/profile")}
+                                icon={FaWallet}
+                                label="Wallet"
+                                onClick={() => handleNavigation("/wallet")}
                                 index={4}
                                 highlighted={mobileHighlightedIndex === 4}
                                 onHover={() => setMobileHighlightedIndex(4)}
                               />
                               <MobileMenuItem
-                                icon={FaWallet}
-                                label="Wallet"
-                                onClick={() => handleNavigation("/wallet")}
-                                index={5}
-                                highlighted={mobileHighlightedIndex === 5}
-                                onHover={() => setMobileHighlightedIndex(5)}
-                              />
-                              <MobileMenuItem
                                 icon={FaCog}
                                 label="Settings"
                                 onClick={() => handleNavigation("/settings")}
-                                index={6}
-                                highlighted={mobileHighlightedIndex === 6}
-                                onHover={() => setMobileHighlightedIndex(6)}
+                                index={5}
+                                highlighted={mobileHighlightedIndex === 5}
+                                onHover={() => setMobileHighlightedIndex(5)}
                               />
                               <div className="h-px bg-gray-200 my-1"></div>
                               <MobileMenuItem
                                 icon={FaSignOutAlt}
                                 label="Log out"
                                 onClick={handleLogoutClick}
-                                index={7}
-                                highlighted={mobileHighlightedIndex === 7}
-                                onHover={() => setMobileHighlightedIndex(7)}
+                                index={6}
+                                highlighted={mobileHighlightedIndex === 6}
+                                onHover={() => setMobileHighlightedIndex(6)}
                                 danger
                               />
                             </>
@@ -618,26 +623,30 @@ const SettingsHeader = () => {
 
                         {/* Quick Actions Section */}
                         <div className="p-1.5">
-                          {isHost ? (
+                          {isHost || hasHost ? (
                             <>
-                              <DesktopMenuItem
-                                icon={FaHome}
-                                label="Host Dashboard"
-                                description="Manage your listings"
-                                onClick={() => handleNavigation("/host/dashboard")}
-                                index={0}
-                                highlighted={highlightedIndex === 0}
-                                onHover={() => setHighlightedIndex(0)}
-                              />
-                              <DesktopMenuItem
-                                icon={FaCog}
-                                label="Host Settings"
-                                description="Profile & preferences"
-                                onClick={() => handleNavigation("/host/settings")}
-                                index={1}
-                                highlighted={highlightedIndex === 1}
-                                onHover={() => setHighlightedIndex(1)}
-                              />
+                              {hasHost && (
+                                <DesktopMenuItem
+                                  icon={FaHome}
+                                  label="Host Dashboard"
+                                  description="Manage your listings"
+                                  onClick={() => handleNavigation("/host/dashboard")}
+                                  index={0}
+                                  highlighted={highlightedIndex === 0}
+                                  onHover={() => setHighlightedIndex(0)}
+                                />
+                              )}
+                              {hasHost && (
+                                <DesktopMenuItem
+                                  icon={FaCog}
+                                  label="Host Settings"
+                                  description="Profile & preferences"
+                                  onClick={() => handleNavigation("/host/settings")}
+                                  index={1}
+                                  highlighted={highlightedIndex === 1}
+                                  onHover={() => setHighlightedIndex(1)}
+                                />
+                              )}
                             </>
                           ) : (
                             <>
@@ -682,23 +691,13 @@ const SettingsHeader = () => {
                                 color="emerald"
                               />
                               <DesktopMenuItem
-                                icon={FaUser}
-                                label="Profile"
-                                description="Personal information"
-                                onClick={() => handleNavigation("/profile")}
-                                index={4}
-                                highlighted={highlightedIndex === 4}
-                                onHover={() => setHighlightedIndex(4)}
-                                color="indigo"
-                              />
-                              <DesktopMenuItem
                                 icon={FaWallet}
                                 label="Wallet"
                                 description="Top up & manage balance"
                                 onClick={() => handleNavigation("/wallet")}
-                                index={5}
-                                highlighted={highlightedIndex === 5}
-                                onHover={() => setHighlightedIndex(5)}
+                                index={4}
+                                highlighted={highlightedIndex === 4}
+                                onHover={() => setHighlightedIndex(4)}
                                 color="emerald"
                                 gradient
                               />
@@ -707,14 +706,24 @@ const SettingsHeader = () => {
                                 label="Settings"
                                 description="Preferences & security"
                                 onClick={() => handleNavigation("/settings")}
-                                index={6}
-                                highlighted={highlightedIndex === 6}
-                                onHover={() => setHighlightedIndex(6)}
+                                index={5}
+                                highlighted={highlightedIndex === 5}
+                                onHover={() => setHighlightedIndex(5)}
                                 color="gray"
                               />
                             </>
                           )}
                         </div>
+
+                        {/* Role Switcher (only show if user has both roles) */}
+                        {canSwitchRoles && (
+                          <>
+                            <div className="h-px bg-gray-200"></div>
+                            <div className="p-2">
+                              <RoleSwitcher />
+                            </div>
+                          </>
+                        )}
 
                         <div className="h-px bg-gray-200"></div>
 
@@ -724,9 +733,9 @@ const SettingsHeader = () => {
                             label="Log out"
                             description="Sign out of your account"
                             onClick={handleLogoutClick}
-                            index={isHost ? 2 : 7}
-                            highlighted={highlightedIndex === (isHost ? 2 : 7)}
-                            onHover={() => setHighlightedIndex(isHost ? 2 : 7)}
+                            index={(isHost || hasHost) ? 2 : 6}
+                            highlighted={highlightedIndex === ((isHost || hasHost) ? 2 : 6)}
+                            onHover={() => setHighlightedIndex((isHost || hasHost) ? 2 : 6)}
                             danger
                           />
                         </div>

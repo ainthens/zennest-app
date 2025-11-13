@@ -16,7 +16,6 @@ import {
   deleteConversation
 } from '../services/firestoreService';
 import useAuth from '../hooks/useAuth';
-import SettingsHeader from '../components/SettingsHeader';
 import { FaEnvelope, FaPaperPlane, FaUser, FaSpinner, FaMapMarkerAlt, FaTrash, FaArrowLeft } from 'react-icons/fa';
 
 const HostMessages = () => {
@@ -476,8 +475,8 @@ const HostMessages = () => {
   if (loading) {
     return (
       <>
-        <SettingsHeader />
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+        {/* No header needed - this page is rendered within HostDashboard layout */}
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -493,8 +492,8 @@ const HostMessages = () => {
 
   return (
     <>
-      <SettingsHeader />
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+      {/* No header needed - this page is rendered within HostDashboard layout */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
           {/* Header - Hidden on mobile when conversation is selected */}
           <div className={`mb-4 sm:mb-6 ${selectedConversation && !showConversationList ? 'hidden md:block' : ''}`}>

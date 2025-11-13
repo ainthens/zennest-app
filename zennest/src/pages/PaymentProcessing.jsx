@@ -13,9 +13,9 @@ import {
   PayPalButtons,
   usePayPalScriptReducer
 } from '@paypal/react-paypal-js';
-import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { validatePromoCode, updateCoupon, transferPaymentToHost, getHostProfile, getClaimedVouchers, applyVoucher, markVoucherUsed } from '../services/firestoreService';
+import { transferPaymentToHost, getHostProfile, getClaimedVouchers, applyVoucher, markVoucherUsed } from '../services/firestoreService';
 import { sendBookingConfirmationEmail } from '../services/emailService';
 import useAuth from '../hooks/useAuth';
 import SettingsHeader from '../components/SettingsHeader';
@@ -35,7 +35,6 @@ import {
   FaLock,
   FaTimes,
   FaInfoCircle,
-  FaTag,
   FaCheck,
   FaTicketAlt,
   FaPercent,
@@ -182,12 +181,6 @@ const PaymentProcessing = () => {
   const [paypalEmail, setPaypalEmail] = useState('');
 
   const [messageToHost, setMessageToHost] = useState('');
-
-  const [promoCode, setPromoCode] = useState('');
-  const [appliedPromoCode, setAppliedPromoCode] = useState(null);
-  const [promoCodeError, setPromoCodeError] = useState('');
-  const [validatingPromoCode, setValidatingPromoCode] = useState(false);
-  const [promoDiscount, setPromoDiscount] = useState(0);
 
   // Voucher state
   const [availableVouchers, setAvailableVouchers] = useState([]);
@@ -396,11 +389,11 @@ const PaymentProcessing = () => {
       if (result.success) {
         setSelectedVoucher(result.voucher);
         setVoucherError('');
-        calculateTotals(currentBookingData, listing, promoDiscount, result.discountAmount);
+        calculateTotals(currentBookingData, listing, result.discountAmount);
       } else {
         setVoucherError(result.error || 'Failed to apply voucher');
         setSelectedVoucher(null);
-        calculateTotals(currentBookingData, listing, promoDiscount, 0);
+        calculateTotals(currentBookingData, listing, 0);
       }
     } catch (error) {
       console.error('Error applying voucher:', error);
@@ -415,7 +408,7 @@ const PaymentProcessing = () => {
         }
       })();
       if (currentBookingData) {
-        calculateTotals(currentBookingData, listing, promoDiscount, 0);
+        calculateTotals(currentBookingData, listing, 0);
       }
     } finally {
       setApplyingVoucher(false);
@@ -435,11 +428,11 @@ const PaymentProcessing = () => {
       }
     })();
     if (currentBookingData) {
-      calculateTotals(currentBookingData, listing, promoDiscount, 0);
+      calculateTotals(currentBookingData, listing, 0);
     }
   };
 
-  const calculateTotals = (data, listingData = null, promoDiscountAmount = 0, voucherDiscountAmount = 0) => {
+  const calculateTotals = (data, listingData = null, voucherDiscountAmount = 0) => {
     const listingToUse = listingData || listing;
     if (!listingToUse) return;
 
@@ -455,98 +448,17 @@ const PaymentProcessing = () => {
       subtotal = baseRate * (data.guests || 1);
     }
 
-    // Apply voucher discount first (percentage off), then promo code (fixed amount)
+    // Apply voucher discount (percentage off)
     const subtotalAfterVoucher = voucherDiscountAmount > 0 
       ? Math.max(0, subtotal - voucherDiscountAmount)
       : subtotal;
-    const subtotalAfterPromo = Math.max(0, subtotalAfterVoucher - promoDiscountAmount);
-    const fee = Math.round(subtotalAfterPromo * 0.05);
-    const total = subtotalAfterPromo + fee;
+    const fee = Math.round(subtotalAfterVoucher * 0.05);
+    const total = subtotalAfterVoucher + fee;
 
     setTotalAmount(subtotal);
     setServiceFee(fee);
     setFinalTotal(total);
-    setPromoDiscount(promoDiscountAmount);
     setVoucherDiscount(voucherDiscountAmount);
-  };
-
-  const handleApplyPromoCode = async () => {
-    if (!promoCode.trim()) {
-      setPromoCodeError('Please enter a promo code');
-      return;
-    }
-    if (!listing || !user?.uid) {
-      setPromoCodeError('Unable to validate promo code');
-      return;
-    }
-
-    setValidatingPromoCode(true);
-    setPromoCodeError('');
-
-    try {
-      const currentBookingData = bookingData || (() => {
-        try {
-          const s = sessionStorage.getItem('bookingData');
-          return s ? JSON.parse(s) : null;
-        } catch { return null; }
-      })();
-
-      if (!currentBookingData) {
-        setPromoCodeError('Booking data not found');
-        setValidatingPromoCode(false);
-        return;
-      }
-
-      const baseRate = listing.discount > 0
-        ? (listing.rate || 0) * (1 - listing.discount / 100)
-        : (listing.rate || 0);
-
-      let subtotal = 0;
-      if (listing.category === 'home') {
-        const nights = currentBookingData.nights || 0;
-        subtotal = nights > 0 ? baseRate * nights * (currentBookingData.guests || 1) : baseRate;
-      } else {
-        subtotal = baseRate * (currentBookingData.guests || 1);
-      }
-
-      const result = await validatePromoCode(
-        promoCode.trim(),
-        listing.id,
-        listing.hostId,
-        subtotal
-      );
-
-      if (result.success) {
-        setAppliedPromoCode(result.coupon);
-        setPromoCodeError('');
-        calculateTotals(currentBookingData, listing, result.discountAmount || 0, voucherDiscount);
-      } else {
-        setPromoCodeError(result.error || 'Invalid promo code');
-        setAppliedPromoCode(null);
-        calculateTotals(currentBookingData, listing, 0, voucherDiscount);
-      }
-    } catch (error) {
-      console.error('Error validating promo code:', error);
-      setPromoCodeError('Failed to validate promo code. Please try again.');
-      setAppliedPromoCode(null);
-    } finally {
-      setValidatingPromoCode(false);
-    }
-  };
-
-  const handleRemovePromoCode = () => {
-    setPromoCode('');
-    setAppliedPromoCode(null);
-    setPromoCodeError('');
-    const currentBookingData = bookingData || (() => {
-      try {
-        const s = sessionStorage.getItem('bookingData');
-        return s ? JSON.parse(s) : null;
-      } catch { return null; }
-    })();
-    if (currentBookingData && listing) {
-      calculateTotals(currentBookingData, listing, 0, voucherDiscount);
-    }
   };
 
   const handleNext = async () => {
@@ -560,10 +472,6 @@ const PaymentProcessing = () => {
       if (paymentMethod === 'wallet' && walletBalance < finalTotal) {
         alert('Insufficient wallet balance. Please top up your wallet or use another payment method.');
         return;
-      }
-
-      if (appliedPromoCode) {
-        await handleApplyPromoCode();
       }
 
       // Apply voucher if selected but not yet applied
@@ -580,6 +488,28 @@ const PaymentProcessing = () => {
   const handleBack = () => {
     if (currentStep > 1) setCurrentStep(currentStep - 1);
     else navigate(-1);
+  };
+
+  // Helper function to convert date string to Firestore Timestamp
+  const convertToTimestamp = (dateString) => {
+    if (!dateString) return null;
+    // If it's already a Timestamp, return it
+    if (dateString && typeof dateString.toDate === 'function') {
+      return dateString;
+    }
+    // If it's a Date object, convert to Timestamp
+    if (dateString instanceof Date) {
+      return Timestamp.fromDate(dateString);
+    }
+    // If it's a string (format: "YYYY-MM-DD"), parse it and convert to Timestamp
+    if (typeof dateString === 'string') {
+      // Parse the date string (format: "YYYY-MM-DD")
+      // Create a Date object at midnight in local timezone
+      const [year, month, day] = dateString.split('-').map(Number);
+      const date = new Date(year, month - 1, day); // month is 0-indexed
+      return Timestamp.fromDate(date);
+    }
+    return null;
   };
 
   const createBooking = async () => {
@@ -603,14 +533,11 @@ const PaymentProcessing = () => {
       paymentMethod: paymentMethod === 'creditcard' ? 'paypal' : paymentMethod,
       paymentTiming: paymentTiming,
       paypalEmail: (paymentMethod === 'paypal' || paymentMethod === 'creditcard') ? paypalEmail : null,
-      checkIn: finalBookingData.checkIn || null,
-      checkOut: finalBookingData.checkOut || null,
+      checkIn: convertToTimestamp(finalBookingData.checkIn),
+      checkOut: convertToTimestamp(finalBookingData.checkOut),
       guests: finalBookingData.guests || 1,
       nights: finalBookingData.nights || 0,
       subtotal: totalAmount,
-      promoCode: appliedPromoCode?.code || null,
-      promoCodeId: appliedPromoCode?.id || null,
-      promoDiscount: promoDiscount,
       voucherCode: selectedVoucher?.code || null,
       voucherId: selectedVoucher?.id || null,
       voucherDiscount: voucherDiscount,
@@ -642,8 +569,6 @@ const PaymentProcessing = () => {
       description: `Booking payment for ${listing.title}`,
       paymentMethod: 'wallet',
       bookingId: bookingId,
-      promoCode: appliedPromoCode?.code || null,
-      promoDiscount: promoDiscount || 0,
       voucherCode: selectedVoucher?.code || null,
       voucherDiscount: voucherDiscount || 0,
       createdAt: serverTimestamp()
@@ -712,17 +637,6 @@ const PaymentProcessing = () => {
         updatedAt: serverTimestamp()
       });
 
-      if (appliedPromoCode && appliedPromoCode.id) {
-        try {
-          await updateCoupon(appliedPromoCode.id, {
-            usageCount: (appliedPromoCode.usageCount || 0) + 1,
-            lastUsedAt: serverTimestamp()
-          });
-        } catch (err) {
-          console.error('Error updating coupon usage', err);
-        }
-      }
-
       // Mark voucher as used after successful payment
       if (selectedVoucher && selectedVoucher.id) {
         try {
@@ -746,8 +660,6 @@ const PaymentProcessing = () => {
         bookingId: bookingIdToUse,
         paypalPaymentId: paymentId,
         paypalOrderId: orderId || null,
-        promoCode: appliedPromoCode?.code || null,
-        promoDiscount: promoDiscount || 0,
         voucherCode: selectedVoucher?.code || null,
         voucherDiscount: voucherDiscount || 0,
         createdAt: serverTimestamp(),
@@ -913,16 +825,6 @@ const PaymentProcessing = () => {
         // Don't transfer payment until booking is approved
         // Payment transfer will happen after host approves the booking
         // Don't send confirmation email until host approves
-      }
-
-      if (appliedPromoCode && appliedPromoCode.id) {
-        try {
-          await updateCoupon(appliedPromoCode.id, {
-            usageCount: (appliedPromoCode.usageCount || 0) + 1
-          });
-        } catch (err) {
-          console.error('Error updating promo usage', err);
-        }
       }
 
       // Mark voucher as used after successful booking
@@ -1187,41 +1089,6 @@ const PaymentProcessing = () => {
                     <p className="text-sm text-gray-600">Choose how you'd like to pay</p>
                   </div>
 
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      <FaTag className="inline mr-2 text-emerald-600" />
-                      Promo Code
-                    </label>
-                    {!appliedPromoCode ? (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={promoCode}
-                          onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoCodeError(''); }}
-                          onKeyPress={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyPromoCode(); } }}
-                          placeholder="Enter promo code"
-                          className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-emerald-500 focus:outline-none text-sm uppercase"
-                          disabled={validatingPromoCode}
-                        />
-                        <button onClick={handleApplyPromoCode} disabled={validatingPromoCode || !promoCode.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
-                          {validatingPromoCode ? '...' : 'Apply'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-emerald-300">
-                        <div className="flex items-center gap-2">
-                          <FaCheckCircle className="text-emerald-600" />
-                          <span className="font-mono font-semibold text-emerald-700">{appliedPromoCode.code}</span>
-                          <span className="text-sm text-gray-600">- {appliedPromoCode.discount}{appliedPromoCode.discountType === 'percentage' ? '%' : '₱'} off</span>
-                        </div>
-                        <button onClick={handleRemovePromoCode} className="text-gray-400 hover:text-red-600 transition-colors" title="Remove promo code">
-                          <FaTimes className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                    {promoCodeError && (<p className="mt-2 text-xs text-red-600 flex items-center gap-1"><FaTimes className="w-3 h-3" />{promoCodeError}</p>)}
-                  </div>
-
                   {/* Voucher Selection */}
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1376,7 +1243,6 @@ const PaymentProcessing = () => {
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs"><span className="text-gray-600">Subtotal</span><span className="font-medium text-gray-900">₱{totalAmount.toLocaleString()}</span></div>
                       {selectedVoucher && voucherDiscount > 0 && (<div className="flex justify-between text-xs"><span className="text-gray-600 flex items-center gap-1"><FaTicketAlt className="text-emerald-600" /> Voucher ({selectedVoucher.code})</span><span className="font-medium text-emerald-600">-₱{voucherDiscount.toLocaleString()}</span></div>)}
-                      {appliedPromoCode && promoDiscount > 0 && (<div className="flex justify-between text-xs"><span className="text-gray-600 flex items-center gap-1"><FaTag className="text-emerald-600" /> Promo Code ({appliedPromoCode.code})</span><span className="font-medium text-emerald-600">-₱{promoDiscount.toLocaleString()}</span></div>)}
                       <div className="flex justify-between text-xs"><span className="text-gray-600">Service fee</span><span className="font-medium text-gray-900">₱{serviceFee.toLocaleString()}</span></div>
                       <div className="pt-2 border-t border-gray-300 flex justify-between"><span className="font-bold text-gray-900 text-sm">Total</span><span className="font-bold text-emerald-600 text-base">₱{finalTotal.toLocaleString()}</span></div>
                     </div>

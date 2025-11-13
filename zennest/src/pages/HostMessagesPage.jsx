@@ -1,14 +1,14 @@
 // src/pages/HostMessagesPage.jsx
 // This is a placeholder page. The actual implementation is in HostMessages.jsx
 // This file is kept for routing compatibility
+// Note: Host pages are rendered within HostDashboard layout, so no header is needed here
 import React from 'react';
-import { Navigate } from 'react-router-dom';
 
 const HostMessagesPage = () => {
-  // Redirect to the actual messages page if needed
-  // Or you can import and render HostMessages here
+  // This page is rendered within HostDashboard layout which has its own sidebar
+  // No header component needed as it's for guest accounts
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pt-20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 mb-4 sm:mb-8" style={{ fontFamily: 'Poppins, sans-serif' }}>
           Host Messages

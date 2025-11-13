@@ -6,6 +6,7 @@ import useAuth from '../hooks/useAuth';
 import { getHostProfile } from '../services/firestoreService';
 import ZennestHotingLogo from '../assets/zennest-hosting-logo.svg';
 import Loading from '../components/Loading';
+import RoleSwitcher from '../components/RoleSwitcher';
 import {
   FaHome,
   FaCalendarAlt,
@@ -189,7 +190,7 @@ const HostDashboard = () => {
         w-[260px] sm:w-64 bg-white shadow-lg
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-        h-screen overflow-hidden flex-shrink-0
+        h-screen overflow-y-auto overflow-x-hidden flex-shrink-0
         max-w-[85vw] lg:max-w-none
       `}>
         <div className="flex flex-col h-full">
@@ -458,6 +459,12 @@ const HostDashboard = () => {
                 </span>
               </div>
             </div>
+            
+            {/* Role Switcher */}
+            <div className="mb-2 sm:mb-3 w-full">
+              <RoleSwitcher variant="sidebar" />
+            </div>
+            
             <button
               onClick={handleLogoutClick}
               className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-all font-semibold text-xs sm:text-sm border-2 border-transparent hover:border-red-200 shadow-sm hover:shadow-md min-h-[44px]"
