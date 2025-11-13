@@ -1,10 +1,4 @@
-// PaymentProcessing.jsx - Multi-step payment flow (fixed PayPal integration)
-//
-// Key fixes:
-// - Removed manual PayPal SDK injection (no double-loading)
-// - Use PayPalScriptProvider only
-// - Default to PHP currency (per request). Auto-fallback to USD only if SDK fails with PHP.
-// - Tolerant Client ID resolution (ENV or window global)
+// PaymentProcessing.jsx - Complete working version with PayPal integration
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,7 +7,7 @@ import {
   PayPalButtons,
   usePayPalScriptReducer
 } from '@paypal/react-paypal-js';
-import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { validatePromoCode, updateCoupon, transferPaymentToHost, getHostProfile } from '../services/firestoreService';
 import { sendBookingConfirmationEmail } from '../services/emailService';
@@ -917,7 +911,6 @@ const PaymentProcessing = () => {
     );
   }
 
-  // steps array and rendering (unchanged)
   const steps = [
     { number: 1, title: 'Payment Timing', icon: FaCalendar },
     { number: 2, title: 'Payment Method', icon: FaCreditCard },
@@ -1167,6 +1160,62 @@ const PaymentProcessing = () => {
 
                   {messageToHost.trim() && (<div className="bg-slate-50 rounded-lg p-4 border border-gray-200"><h3 className="font-semibold text-gray-900 mb-2 text-sm">Message to Host</h3><p className="text-xs text-gray-700 whitespace-pre-wrap">{messageToHost}</p></div>)}
 
+                  {/* PAYPAL BUTTONS SECTION - CRITICAL FIX */}
+                  {(paymentMethod === 'paypal' || paymentMethod === 'creditcard') && paymentTiming === 'now' && (
+                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-200">
+                      <h3 className="font-semibold text-gray-900 mb-3 text-sm">
+                        {paymentMethod === 'creditcard' ? 'Pay with Credit Card' : 'Pay with PayPal'}
+                      </h3>
+
+                      {!paypalClientId && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg space-y-2">
+                          <p className="text-sm font-semibold text-red-800">PayPal Client ID is not configured</p>
+                          <p className="text-xs text-red-700">Please set VITE_PAYPAL_CLIENT_ID in your environment or window.PAYPAL_CLIENT_ID for runtime.</p>
+                        </div>
+                      )}
+
+                      {paypalError && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm font-semibold text-red-800">Payment error</p>
+                          <p className="text-xs text-red-700">{paypalError}</p>
+                        </div>
+                      )}
+
+                      {/* PAYPAL BUTTONS RENDERED HERE */}
+                      {paypalClientId && currentBookingData && finalTotal > 0 && (
+                        <PayPalScriptProvider
+                          options={{
+                            'client-id': paypalClientId,
+                            currency: paypalCurrency,
+                            intent: 'capture',
+                            components: 'buttons'
+                          }}
+                        >
+                          <PayPalButtonsWrapper
+                            createOrder={createPayPalOrder}
+                            onApprove={onApprovePayPalOrder}
+                            onCancel={onCancelPayPalOrder}
+                            onError={(err) => {
+                              console.error('PayPalButtons onError:', err);
+                              setPaypalError('PayPal error. Please try again.');
+                            }}
+                            style={{ layout: 'vertical' }}
+                            forceReinitKey={forceReinitKey}
+                            currency={paypalCurrency}
+                            onCurrencyFallback={handleCurrencyFallback}
+                          />
+                        </PayPalScriptProvider>
+                      )}
+
+                      {paypalCurrency === 'USD' && currencySwitched && (
+                        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                          <p className="font-semibold text-yellow-800">Using USD for testing</p>
+                          <p className="text-xs text-yellow-700">PayPal sandbox may not support PHP. We've switched to USD automatically for this session.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
                     <FaShieldAlt className="text-emerald-600 mt-0.5 flex-shrink-0 w-4 h-4" />
                     <div>
@@ -1189,17 +1238,20 @@ const PaymentProcessing = () => {
                   Continue <FaChevronRight className="w-3 h-3" />
                 </button>
               ) : (
-                <button
-                  onClick={handleCompleteBooking}
-                  disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {processing ? 'Processing...' : 'Complete Booking'}
-                </button>
+                // Only show regular booking button if NOT using PayPal/Credit Card with immediate payment
+                !((paymentMethod === 'paypal' || paymentMethod === 'creditcard') && paymentTiming === 'now') && (
+                  <button
+                    onClick={handleCompleteBooking}
+                    disabled={processing || (paymentMethod === 'wallet' && walletBalance < finalTotal)}
+                    className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {processing ? 'Processing...' : 'Complete Booking'}
+                  </button>
+                )
               )}
             </div>
           </div>
-        </div>
+        </div> 
       </div>
     </>
   );
